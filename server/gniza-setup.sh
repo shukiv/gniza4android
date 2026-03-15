@@ -44,7 +44,7 @@ echo ""
 
 # Ask for backup directory if not provided via --path
 if [[ -z "$BACKUP_DIR" ]]; then
-    read -r -p "Backup directory [${DEFAULT_BACKUP_DIR}]: " BACKUP_DIR
+    read -r -p "Backup directory [${DEFAULT_BACKUP_DIR}]: " BACKUP_DIR < /dev/tty
     BACKUP_DIR="${BACKUP_DIR:-$DEFAULT_BACKUP_DIR}"
 fi
 
