@@ -21,7 +21,7 @@ Android backup solution that automatically backs up folders from your device to 
 Run the setup script on your backup server:
 
 ```bash
-curl -sL https://raw.githubusercontent.com/shukiv/gniza4android/main/server/gniza-setup.sh | bash
+curl -sL https://git.linux-hosting.co.il/shukivaknin/gniza4android/raw/branch/main/server/gniza-setup.sh | bash
 ```
 
 Or with options:
@@ -37,10 +37,10 @@ The script will:
 
 ### 2. Install the app
 
-Download the latest APK from [Releases](https://github.com/shukiv/gniza4android/releases) or build from source:
+Download the latest APK from [Releases](https://git.linux-hosting.co.il/shukivaknin/gniza4android/releases) or build from source:
 
 ```bash
-git clone https://github.com/shukiv/gniza4android.git
+git clone https://git.linux-hosting.co.il/shukivaknin/gniza4android.git
 cd gniza4android
 ./gradlew assembleDebug
 adb install app/build/outputs/apk/debug/app-debug.apk
