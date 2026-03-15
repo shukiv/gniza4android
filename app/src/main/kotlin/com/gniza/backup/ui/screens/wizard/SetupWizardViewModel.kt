@@ -91,7 +91,7 @@ class SetupWizardViewModel @Inject constructor(
                 _serverHost.value = obj.optString("host", "")
                 _serverPort.value = obj.optInt("port", 22)
                 _serverUsername.value = obj.optString("user", "")
-                _serverName.value = obj.optString("host", "")
+                _serverName.value = obj.optString("name", obj.optString("host", ""))
                 val auth = obj.optString("auth", "ssh_key")
                 _serverAuthMethod.value = if (auth == "password") AuthMethod.PASSWORD else AuthMethod.SSH_KEY
                 if (auth == "password") _serverPassword.value = obj.optString("pass", "")

@@ -34,15 +34,19 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Set default backup dir based on user
-if [[ -z "$BACKUP_DIR" ]]; then
-    BACKUP_DIR="$(eval echo ~${BACKUP_USER})/gniza-backups"
-fi
+# Set default backup dir
+DEFAULT_BACKUP_DIR="$(pwd)/backup"
 
 echo "================================"
 echo "  Gniza Backup - Server Setup"
 echo "================================"
 echo ""
+
+# Ask for backup directory if not provided via --path
+if [[ -z "$BACKUP_DIR" ]]; then
+    read -r -p "Backup directory [${DEFAULT_BACKUP_DIR}]: " BACKUP_DIR
+    BACKUP_DIR="${BACKUP_DIR:-$DEFAULT_BACKUP_DIR}"
+fi
 
 # --- Detect package manager ---
 install_pkg() {
@@ -151,6 +155,8 @@ if [[ -z "$SERVER_IP" ]]; then
     SERVER_IP="$(hostname)"
 fi
 
+SERVER_HOSTNAME="$(hostname)"
+
 # --- Transfer key via croc or embed in QR ---
 CROC_CODE=""
 if command -v croc &>/dev/null; then
@@ -163,7 +169,7 @@ if command -v croc &>/dev/null; then
     echo ""
 
     # Build and display QR code BEFORE starting croc (so user can scan while croc waits)
-    QR_JSON="{\"gniza\":1,\"host\":\"${SERVER_IP}\",\"port\":${SSH_PORT},\"user\":\"${BACKUP_USER}\",\"auth\":\"ssh_key\",\"croc\":\"${CROC_CODE}\",\"path\":\"${BACKUP_DIR}\"}"
+    QR_JSON="{\"gniza\":1,\"name\":\"${SERVER_HOSTNAME}\",\"host\":\"${SERVER_IP}\",\"port\":${SSH_PORT},\"user\":\"${BACKUP_USER}\",\"auth\":\"ssh_key\",\"croc\":\"${CROC_CODE}\",\"path\":\"${BACKUP_DIR}\"}"
 
     echo "================================"
     echo "  Server Configuration"
@@ -189,7 +195,8 @@ if command -v croc &>/dev/null; then
     echo ""
 
     # Start croc send (blocks until receiver connects)
-    croc send --code "${CROC_CODE}" "${KEY_PATH}" 2>&1
+    echo "Waiting for the Gniza app to receive the key..."
+    croc send --code "${CROC_CODE}" "${KEY_PATH}" > /dev/null 2>&1
 
     echo ""
     echo "[OK] Private key transferred to the app via croc."
@@ -200,7 +207,7 @@ if command -v croc &>/dev/null; then
 else
     # Fallback: embed compressed key in QR
     PRIVATE_KEY=$(gzip -c "${KEY_PATH}" | base64 -w 0)
-    QR_JSON="{\"gniza\":1,\"host\":\"${SERVER_IP}\",\"port\":${SSH_PORT},\"user\":\"${BACKUP_USER}\",\"auth\":\"ssh_key\",\"key\":\"${PRIVATE_KEY}\",\"path\":\"${BACKUP_DIR}\"}"
+    QR_JSON="{\"gniza\":1,\"name\":\"${SERVER_HOSTNAME}\",\"host\":\"${SERVER_IP}\",\"port\":${SSH_PORT},\"user\":\"${BACKUP_USER}\",\"auth\":\"ssh_key\",\"key\":\"${PRIVATE_KEY}\",\"path\":\"${BACKUP_DIR}\"}"
 
     echo ""
     echo "================================"

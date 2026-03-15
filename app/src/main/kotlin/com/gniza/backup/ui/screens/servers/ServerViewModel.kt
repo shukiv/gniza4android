@@ -177,7 +177,7 @@ class ServerViewModel @Inject constructor(
                 }
 
                 val server = Server(
-                    name = obj.optString("host", "Server"),
+                    name = obj.optString("name", obj.optString("host", "Server")),
                     host = obj.optString("host", ""),
                     port = obj.optInt("port", 22),
                     username = obj.optString("user", ""),
