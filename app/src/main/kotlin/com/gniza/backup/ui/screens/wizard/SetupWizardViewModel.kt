@@ -112,31 +112,12 @@ class SetupWizardViewModel @Inject constructor(
                 // Receive private key via croc transfer
                 if (obj.has("croc")) {
                     val crocCode = obj.getString("croc")
-                    val nativeLibDir = context.applicationInfo.nativeLibraryDir
-                    val crocBinary = File(nativeLibDir, Constants.BUNDLED_CROC_LIB)
-                    if (crocBinary.exists() && crocBinary.canExecute()) {
-                        withContext(Dispatchers.IO) {
-                            val receiveDir = File(context.filesDir, "croc_receive")
-                            receiveDir.listFiles()?.forEach { it.delete() }
-                            receiveDir.mkdirs()
-                            val process = ProcessBuilder(
-                                crocBinary.absolutePath, "--yes", "--overwrite", "--out", receiveDir.absolutePath, crocCode
-                            )
-                                .redirectErrorStream(true)
-                                .start()
-                            val finished = process.waitFor(60, TimeUnit.SECONDS)
-                            if (!finished) process.destroyForcibly()
-                            val receivedFile = receiveDir.listFiles()?.firstOrNull { it.isFile }
-                            if (receivedFile != null && receivedFile.exists() && receivedFile.length() > 0) {
-                                val keyBytes = receivedFile.readBytes()
-                                val keyName = "croc_${System.currentTimeMillis()}"
-                                sshKeyManager.importKey(keyName, keyBytes)
-                                generatedKeyName = keyName
-                                _sshPublicKey.value = sshKeyManager.getPublicKey(keyName)
-                                _sshKeyGenerated.value = true
-                                receivedFile.delete()
-                            }
-                        }
+                    val keyPath = receiveCrocKey(crocCode)
+                    if (keyPath != null) {
+                        val keyName = File(keyPath).name
+                        generatedKeyName = keyName
+                        _sshPublicKey.value = try { sshKeyManager.getPublicKey(keyName) } catch (_: Exception) { "Key imported" }
+                        _sshKeyGenerated.value = true
                     }
                 }
             } catch (_: Exception) { }
@@ -201,6 +182,41 @@ class SetupWizardViewModel @Inject constructor(
                 }
             }
             _isSaving.value = false
+        }
+    }
+
+    private suspend fun receiveCrocKey(crocCode: String): String? {
+        val nativeLibDir = context.applicationInfo.nativeLibraryDir
+        val crocBinary = File(nativeLibDir, Constants.BUNDLED_CROC_LIB)
+        if (!crocBinary.exists() || !crocBinary.canExecute()) return null
+
+        return withContext(Dispatchers.IO) {
+            val receiveDir = File(context.filesDir, "croc_receive")
+            receiveDir.listFiles()?.forEach { it.delete() }
+            receiveDir.mkdirs()
+
+            val env = ProcessBuilder(
+                crocBinary.absolutePath, "--yes", "--overwrite", "--out", receiveDir.absolutePath
+            )
+            env.environment()["HOME"] = context.filesDir.absolutePath
+            env.environment()["CROC_SECRET"] = crocCode
+            env.redirectErrorStream(true)
+            val process = env.start()
+
+            val finished = process.waitFor(60, TimeUnit.SECONDS)
+            if (!finished) process.destroyForcibly()
+
+            val receivedFile = receiveDir.listFiles()?.firstOrNull { it.isFile }
+            if (receivedFile != null && receivedFile.exists() && receivedFile.length() > 0) {
+                val keyBytes = receivedFile.readBytes()
+                val keyName = "croc_${System.currentTimeMillis()}"
+                sshKeyManager.importKey(keyName, keyBytes)
+                val path = sshKeyManager.getPrivateKeyPath(keyName)
+                receivedFile.delete()
+                path
+            } else {
+                null
+            }
         }
     }
 
