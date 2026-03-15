@@ -122,8 +122,8 @@ echo "[OK] Key pair generated: ${KEY_PATH}"
 cat "${KEY_PATH}.pub" >> "${AUTHORIZED_KEYS}"
 echo "[OK] Public key added to ${AUTHORIZED_KEYS}"
 
-# --- Read the private key to embed in QR code ---
-PRIVATE_KEY=$(cat "${KEY_PATH}" | base64 -w 0)
+# --- Compress and encode the private key for QR ---
+PRIVATE_KEY=$(gzip -c "${KEY_PATH}" | base64 -w 0)
 
 # --- Detect IP address ---
 get_ip() {

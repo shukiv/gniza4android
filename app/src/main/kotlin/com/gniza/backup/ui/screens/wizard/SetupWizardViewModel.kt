@@ -92,7 +92,8 @@ class SetupWizardViewModel @Inject constructor(
 
                 // Import embedded private key
                 if (obj.has("key")) {
-                    val keyBytes = android.util.Base64.decode(obj.getString("key"), android.util.Base64.DEFAULT)
+                    val compressed = android.util.Base64.decode(obj.getString("key"), android.util.Base64.DEFAULT)
+                    val keyBytes = java.util.zip.GZIPInputStream(compressed.inputStream()).readBytes()
                     val keyName = "qr_${System.currentTimeMillis()}"
                     sshKeyManager.importKey(keyName, keyBytes)
                     generatedKeyName = keyName
