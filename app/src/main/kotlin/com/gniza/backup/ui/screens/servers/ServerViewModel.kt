@@ -130,13 +130,23 @@ class ServerViewModel @Inject constructor(
             try {
                 val obj = org.json.JSONObject(json)
                 if (!obj.has("gniza")) return@launch
+
+                var privateKeyPath: String? = null
+                if (obj.has("key")) {
+                    val keyBytes = android.util.Base64.decode(obj.getString("key"), android.util.Base64.DEFAULT)
+                    val keyName = "qr_${System.currentTimeMillis()}"
+                    sshKeyManager.importKey(keyName, keyBytes)
+                    privateKeyPath = sshKeyManager.getPrivateKeyPath(keyName)
+                }
+
                 val server = Server(
                     name = obj.optString("host", "Server"),
                     host = obj.optString("host", ""),
                     port = obj.optInt("port", 22),
                     username = obj.optString("user", ""),
                     authMethod = if (obj.optString("auth") == "password") AuthMethod.PASSWORD else AuthMethod.SSH_KEY,
-                    password = if (obj.has("pass")) obj.optString("pass", "") else null
+                    password = if (obj.has("pass")) obj.optString("pass", "") else null,
+                    privateKeyPath = privateKeyPath
                 )
                 serverRepository.saveServer(server)
             } catch (_: Exception) { }

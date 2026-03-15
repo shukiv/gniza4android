@@ -76,19 +76,31 @@ class SetupWizardViewModel @Inject constructor(
     fun updateScheduleInterval(v: ScheduleInterval) { _scheduleInterval.value = v }
 
     fun applyQrData(json: String) {
-        try {
-            val obj = org.json.JSONObject(json)
-            if (!obj.has("gniza")) return
-            _serverHost.value = obj.optString("host", "")
-            _serverPort.value = obj.optInt("port", 22)
-            _serverUsername.value = obj.optString("user", "")
-            _serverName.value = obj.optString("host", "")
-            val auth = obj.optString("auth", "ssh_key")
-            _serverAuthMethod.value = if (auth == "password") AuthMethod.PASSWORD else AuthMethod.SSH_KEY
-            if (auth == "password") _serverPassword.value = obj.optString("pass", "")
-            val path = obj.optString("path", "")
-            if (path.isNotBlank()) _scheduleDestinationPath.value = path
-        } catch (_: Exception) { }
+        viewModelScope.launch {
+            try {
+                val obj = org.json.JSONObject(json)
+                if (!obj.has("gniza")) return@launch
+                _serverHost.value = obj.optString("host", "")
+                _serverPort.value = obj.optInt("port", 22)
+                _serverUsername.value = obj.optString("user", "")
+                _serverName.value = obj.optString("host", "")
+                val auth = obj.optString("auth", "ssh_key")
+                _serverAuthMethod.value = if (auth == "password") AuthMethod.PASSWORD else AuthMethod.SSH_KEY
+                if (auth == "password") _serverPassword.value = obj.optString("pass", "")
+                val path = obj.optString("path", "")
+                if (path.isNotBlank()) _scheduleDestinationPath.value = path
+
+                // Import embedded private key
+                if (obj.has("key")) {
+                    val keyBytes = android.util.Base64.decode(obj.getString("key"), android.util.Base64.DEFAULT)
+                    val keyName = "qr_${System.currentTimeMillis()}"
+                    sshKeyManager.importKey(keyName, keyBytes)
+                    generatedKeyName = keyName
+                    _sshPublicKey.value = sshKeyManager.getPublicKey(keyName)
+                    _sshKeyGenerated.value = true
+                }
+            } catch (_: Exception) { }
+        }
     }
 
     fun generateSshKey() {
