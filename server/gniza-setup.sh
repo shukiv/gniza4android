@@ -189,7 +189,7 @@ if command -v croc &>/dev/null; then
     echo ""
 
     # Start croc send in background, then show QR
-    croc send --code "${CROC_CODE}" "${KEY_PATH}" > /dev/null 2>&1 &
+    CROC_SECRET="${CROC_CODE}" croc send "${KEY_PATH}" > /dev/null 2>&1 &
     CROC_PID=$!
 
     echo "After scanning the QR code, the private key will be"
