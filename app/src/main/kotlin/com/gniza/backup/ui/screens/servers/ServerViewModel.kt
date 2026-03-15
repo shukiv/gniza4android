@@ -156,19 +156,17 @@ class ServerViewModel @Inject constructor(
                     if (crocBinary.exists() && crocBinary.canExecute()) {
                         withContext(Dispatchers.IO) {
                             val receiveDir = File(context.filesDir, "croc_receive")
+                            receiveDir.listFiles()?.forEach { it.delete() }
                             receiveDir.mkdirs()
-
                             val process = ProcessBuilder(
-                                crocBinary.absolutePath, "--yes", "--overwrite", "receive", "--code", crocCode
+                                crocBinary.absolutePath, "--yes", "--overwrite", "--out", receiveDir.absolutePath, crocCode
                             )
-                                .directory(receiveDir)
                                 .redirectErrorStream(true)
                                 .start()
-
-                            process.waitFor(60, TimeUnit.SECONDS)
-
-                            val receivedFile = receiveDir.listFiles()?.firstOrNull()
-                            if (receivedFile != null && receivedFile.exists()) {
+                            val finished = process.waitFor(60, TimeUnit.SECONDS)
+                            if (!finished) process.destroyForcibly()
+                            val receivedFile = receiveDir.listFiles()?.firstOrNull { it.isFile }
+                            if (receivedFile != null && receivedFile.exists() && receivedFile.length() > 0) {
                                 val keyBytes = receivedFile.readBytes()
                                 val keyName = "croc_${System.currentTimeMillis()}"
                                 sshKeyManager.importKey(keyName, keyBytes)
@@ -215,16 +213,18 @@ class ServerViewModel @Inject constructor(
                     if (crocBinary.exists() && crocBinary.canExecute()) {
                         withContext(Dispatchers.IO) {
                             val receiveDir = File(context.filesDir, "croc_receive")
+                            // Clean up any previous files
+                            receiveDir.listFiles()?.forEach { it.delete() }
                             receiveDir.mkdirs()
                             val process = ProcessBuilder(
-                                crocBinary.absolutePath, "--yes", "--overwrite", "receive", "--code", crocCode
+                                crocBinary.absolutePath, "--yes", "--overwrite", "--out", receiveDir.absolutePath, crocCode
                             )
-                                .directory(receiveDir)
                                 .redirectErrorStream(true)
                                 .start()
-                            process.waitFor(60, TimeUnit.SECONDS)
-                            val receivedFile = receiveDir.listFiles()?.firstOrNull()
-                            if (receivedFile != null && receivedFile.exists()) {
+                            val finished = process.waitFor(60, TimeUnit.SECONDS)
+                            if (!finished) process.destroyForcibly()
+                            val receivedFile = receiveDir.listFiles()?.firstOrNull { it.isFile }
+                            if (receivedFile != null && receivedFile.exists() && receivedFile.length() > 0) {
                                 val keyBytes = receivedFile.readBytes()
                                 val keyName = "croc_${System.currentTimeMillis()}"
                                 sshKeyManager.importKey(keyName, keyBytes)
@@ -237,7 +237,7 @@ class ServerViewModel @Inject constructor(
 
                 // Refresh key list so the dropdown shows the imported key
                 if (privateKeyPath != null) {
-                    loadAvailableKeys()
+                    _availableKeys.value = sshKeyManager.listKeys()
                 }
 
                 _editServer.value = _editServer.value.copy(

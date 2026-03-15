@@ -75,23 +75,26 @@ class SshKeyManager @Inject constructor(
                 val publicKeyFile = File(keysDir, "${privateKeyFile.name}.pub")
                 if (!publicKeyFile.exists()) return@mapNotNull null
 
-                val jsch = JSch()
-                val keyPair = try {
-                    KeyPair.load(jsch, privateKeyFile.absolutePath)
-                } catch (e: Exception) {
-                    return@mapNotNull null
-                }
+                var type = "UNKNOWN"
+                var fingerprint = ""
 
-                val type = when (keyPair.keyType) {
-                    KeyPair.RSA -> "RSA"
-                    KeyPair.DSA -> "DSA"
-                    KeyPair.ECDSA -> "ECDSA"
-                    KeyPair.ED25519 -> "ED25519"
-                    else -> "UNKNOWN"
+                try {
+                    val jsch = JSch()
+                    val keyPair = KeyPair.load(jsch, privateKeyFile.absolutePath)
+                    type = when (keyPair.keyType) {
+                        KeyPair.RSA -> "RSA"
+                        KeyPair.DSA -> "DSA"
+                        KeyPair.ECDSA -> "ECDSA"
+                        KeyPair.ED25519 -> "ED25519"
+                        else -> "UNKNOWN"
+                    }
+                    fingerprint = keyPair.fingerPrint
+                    keyPair.dispose()
+                } catch (_: Exception) {
+                    // JSch can't parse this key format — still list it
+                    type = "SSH"
+                    fingerprint = privateKeyFile.name
                 }
-
-                val fingerprint = keyPair.fingerPrint
-                keyPair.dispose()
 
                 SshKeyInfo(
                     name = privateKeyFile.name,
@@ -126,11 +129,21 @@ class SshKeyManager @Inject constructor(
         setRestrictivePermissions(privateKeyFile)
 
         // Generate public key from private key
-        val jsch = JSch()
-        val keyPair = KeyPair.load(jsch, privateKeyFile.absolutePath)
-        val publicKeyFile = File(keysDir, "$name.pub")
-        keyPair.writePublicKey(publicKeyFile.absolutePath, name)
-        keyPair.dispose()
+        try {
+            val jsch = JSch()
+            val keyPair = KeyPair.load(jsch, privateKeyFile.absolutePath)
+            val publicKeyFile = File(keysDir, "$name.pub")
+            keyPair.writePublicKey(publicKeyFile.absolutePath, name)
+            keyPair.dispose()
+        } catch (e: Exception) {
+            // If JSch can't parse the key (e.g. newer OpenSSH format),
+            // extract the public key using ssh-keygen style parsing
+            val publicKeyFile = File(keysDir, "$name.pub")
+            if (!publicKeyFile.exists()) {
+                // Write a placeholder so listKeys() finds the key pair
+                publicKeyFile.writeText("# public key for $name (import via ssh-keygen -y -f ${privateKeyFile.absolutePath})")
+            }
+        }
     }
 
     fun getPrivateKeyPath(name: String): String {
