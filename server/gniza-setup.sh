@@ -36,7 +36,7 @@ done
 
 # Set default backup dir based on user
 if [[ -z "$BACKUP_DIR" ]]; then
-    BACKUP_DIR="/home/${BACKUP_USER}/gniza-backups"
+    BACKUP_DIR="$(eval echo ~${BACKUP_USER})/gniza-backups"
 fi
 
 echo "================================"
@@ -99,7 +99,7 @@ chmod 700 "${BACKUP_DIR}"
 echo "[OK] Backup directory ready"
 
 # --- Ensure .ssh directory exists ---
-SSH_DIR="/home/${BACKUP_USER}/.ssh"
+SSH_DIR="$(eval echo ~${BACKUP_USER})/.ssh"
 AUTHORIZED_KEYS="${SSH_DIR}/authorized_keys"
 mkdir -p "${SSH_DIR}"
 chmod 700 "${SSH_DIR}"
