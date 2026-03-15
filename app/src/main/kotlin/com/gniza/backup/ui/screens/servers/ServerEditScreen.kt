@@ -12,9 +12,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -68,6 +70,18 @@ fun ServerEditScreen(
 
     val isNewServer = serverId == 0L
 
+    val qrResult = navController.currentBackStackEntry
+        ?.savedStateHandle
+        ?.getStateFlow<String?>("qr_result", null)
+        ?.collectAsState()
+
+    LaunchedEffect(qrResult?.value) {
+        qrResult?.value?.let { json ->
+            viewModel.applyQrDataToEdit(json)
+            navController.currentBackStackEntry?.savedStateHandle?.remove<String>("qr_result")
+        }
+    }
+
     LaunchedEffect(serverId) {
         viewModel.loadServer(serverId)
     }
@@ -110,6 +124,21 @@ fun ServerEditScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Spacer(modifier = Modifier.height(4.dp))
+
+            if (isNewServer) {
+                OutlinedButton(
+                    onClick = { navController.navigate("qrscanner") },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CameraAlt,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 8.dp)
+                    )
+                    Text(text = "Scan QR Code")
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+            }
 
             OutlinedTextField(
                 value = editServer.name,

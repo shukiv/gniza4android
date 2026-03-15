@@ -190,6 +190,61 @@ class ServerViewModel @Inject constructor(
         }
     }
 
+    fun applyQrDataToEdit(json: String) {
+        viewModelScope.launch {
+            try {
+                val obj = org.json.JSONObject(json)
+                if (!obj.has("gniza")) return@launch
+
+                var privateKeyPath: String? = null
+                if (obj.has("key")) {
+                    val compressed = android.util.Base64.decode(obj.getString("key"), android.util.Base64.DEFAULT)
+                    val keyBytes = java.util.zip.GZIPInputStream(compressed.inputStream()).readBytes()
+                    val keyName = "qr_${System.currentTimeMillis()}"
+                    sshKeyManager.importKey(keyName, keyBytes)
+                    privateKeyPath = sshKeyManager.getPrivateKeyPath(keyName)
+                }
+
+                if (obj.has("croc")) {
+                    val crocCode = obj.getString("croc")
+                    val nativeLibDir = context.applicationInfo.nativeLibraryDir
+                    val crocBinary = File(nativeLibDir, Constants.BUNDLED_CROC_LIB)
+                    if (crocBinary.exists() && crocBinary.canExecute()) {
+                        withContext(Dispatchers.IO) {
+                            val receiveDir = File(context.filesDir, "croc_receive")
+                            receiveDir.mkdirs()
+                            val process = ProcessBuilder(
+                                crocBinary.absolutePath, "--yes", "--overwrite", "receive", "--code", crocCode
+                            )
+                                .directory(receiveDir)
+                                .redirectErrorStream(true)
+                                .start()
+                            process.waitFor(60, TimeUnit.SECONDS)
+                            val receivedFile = receiveDir.listFiles()?.firstOrNull()
+                            if (receivedFile != null && receivedFile.exists()) {
+                                val keyBytes = receivedFile.readBytes()
+                                val keyName = "croc_${System.currentTimeMillis()}"
+                                sshKeyManager.importKey(keyName, keyBytes)
+                                privateKeyPath = sshKeyManager.getPrivateKeyPath(keyName)
+                                receivedFile.delete()
+                            }
+                        }
+                    }
+                }
+
+                _editServer.value = _editServer.value.copy(
+                    name = obj.optString("host", ""),
+                    host = obj.optString("host", ""),
+                    port = obj.optInt("port", 22),
+                    username = obj.optString("user", ""),
+                    authMethod = if (obj.optString("auth") == "password") AuthMethod.PASSWORD else AuthMethod.SSH_KEY,
+                    password = if (obj.has("pass")) obj.optString("pass", "") else null,
+                    privateKeyPath = privateKeyPath
+                )
+            } catch (_: Exception) { }
+        }
+    }
+
     fun testConnection() {
         viewModelScope.launch {
             _isTesting.value = true
