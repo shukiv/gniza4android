@@ -65,6 +65,7 @@ fun ServerEditScreen(
     val connectionTestResult by viewModel.connectionTestResult.collectAsState()
     val availableKeys by viewModel.availableKeys.collectAsState()
     val isTesting by viewModel.isTesting.collectAsState()
+    val qrDestinationPath by viewModel.qrDestinationPath.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var keyDropdownExpanded by remember { mutableStateOf(false) }
 
@@ -308,6 +309,33 @@ fun ServerEditScreen(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     modifier = Modifier.fillMaxWidth()
                 )
+            }
+
+            if (qrDestinationPath.isNotBlank()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = "Remote backup folder",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Text(
+                            text = qrDestinationPath,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Text(
+                            text = "This path will be available when creating a schedule.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(8.dp))

@@ -58,6 +58,9 @@ class ServerViewModel @Inject constructor(
     private val _validationError = MutableStateFlow<String?>(null)
     val validationError: StateFlow<String?> = _validationError.asStateFlow()
 
+    private val _qrDestinationPath = MutableStateFlow("")
+    val qrDestinationPath: StateFlow<String> = _qrDestinationPath.asStateFlow()
+
     init {
         loadAvailableKeys()
     }
@@ -232,8 +235,13 @@ class ServerViewModel @Inject constructor(
                     }
                 }
 
+                // Refresh key list so the dropdown shows the imported key
+                if (privateKeyPath != null) {
+                    loadAvailableKeys()
+                }
+
                 _editServer.value = _editServer.value.copy(
-                    name = obj.optString("host", ""),
+                    name = obj.optString("name", obj.optString("host", "")),
                     host = obj.optString("host", ""),
                     port = obj.optInt("port", 22),
                     username = obj.optString("user", ""),
@@ -241,6 +249,12 @@ class ServerViewModel @Inject constructor(
                     password = if (obj.has("pass")) obj.optString("pass", "") else null,
                     privateKeyPath = privateKeyPath
                 )
+
+                // Store the suggested destination path for use when creating schedules
+                val path = obj.optString("path", "")
+                if (path.isNotBlank()) {
+                    _qrDestinationPath.value = path
+                }
             } catch (_: Exception) { }
         }
     }
