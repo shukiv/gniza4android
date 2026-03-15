@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="gniza_primary">#00897B</color>
+    <color name="gniza_primary_dark">#00695C</color>
+    <color name="gniza_secondary">#FFB300</color>
+    <color name="gniza_background">#FAFAFA</color>
+    <color name="gniza_surface">#FFFFFF</color>
+    <color name="gniza_error">#D32F2F</color>
+    <color name="gniza_success">#388E3C</color>
+    <color name="gniza_orange">#F47216</color>
+</resources>

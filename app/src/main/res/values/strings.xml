@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Gniza</string>
+    <string name="nav_servers">Servers</string>
+    <string name="nav_sources">Sources</string>
+    <string name="nav_backup">Backup</string>
+    <string name="nav_logs">Logs</string>
+    <string name="nav_settings">Settings</string>
+
+    <string name="add_server">Add Server</string>
+    <string name="edit_server">Edit Server</string>
+    <string name="server_name">Server Name</string>
+    <string name="host">Host</string>
+    <string name="port">Port</string>
+    <string name="username">Username</string>
+    <string name="password">Password</string>
+    <string name="auth_method">Authentication</string>
+    <string name="auth_password">Password</string>
+    <string name="auth_ssh_key">SSH Key</string>
+    <string name="test_connection">Test Connection</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="delete">Delete</string>
+
+    <string name="add_source">Add Source</string>
+    <string name="edit_source">Edit Source</string>
+    <string name="source_name">Source Name</string>
+    <string name="select_server">Select Server</string>
+    <string name="source_folders">Source Folders</string>
+    <string name="add_folder">Add Folder</string>
+    <string name="destination_path">Destination Path</string>
+    <string name="include_patterns">Include Patterns</string>
+    <string name="exclude_patterns">Exclude Patterns</string>
+    <string name="schedule">Schedule</string>
+    <string name="schedule_manual">Manual</string>
+    <string name="schedule_hourly">Hourly</string>
+    <string name="schedule_daily">Daily</string>
+    <string name="schedule_weekly">Weekly</string>
+    <string name="wifi_only">Wi-Fi Only</string>
+    <string name="while_charging">While Charging</string>
+
+    <string name="run_now">Run Now</string>
+    <string name="run_all">Run All</string>
+    <string name="backup_running">Backup Running</string>
+    <string name="backup_complete">Backup Complete</string>
+    <string name="backup_failed">Backup Failed</string>
+
+    <string name="no_servers">No servers configured.\nTap + to add one.</string>
+    <string name="no_sources">No backup sources.\nTap + to create one.</string>
+    <string name="no_logs">No backup history yet.</string>
+
+    <string name="ssh_keys">SSH Keys</string>
+    <string name="generate_key">Generate Key</string>
+    <string name="import_key">Import Key</string>
+    <string name="key_type">Key Type</string>
+    <string name="key_name">Key Name</string>
+    <string name="copy_public_key">Copy Public Key</string>
+
+    <string name="settings">Settings</string>
+    <string name="rsync_binary">Rsync Binary</string>
+    <string name="rsync_path">Custom Rsync Path</string>
+    <string name="theme">Theme</string>
+    <string name="theme_system">System</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="log_retention">Log Retention (days)</string>
+    <string name="about">About</string>
+    <string name="version">Version %1$s</string>
+
+    <string name="confirm_delete_title">Confirm Delete</string>
+    <string name="confirm_delete_message">Are you sure you want to delete this?</string>
+
+    <string name="notification_channel_backup">Backup Progress</string>
+    <string name="notification_channel_backup_desc">Shows backup progress and results</string>
+
+    <string name="error_connection_failed">Connection failed: %1$s</string>
+    <string name="error_rsync_not_found">Rsync binary not found. Install rsync or configure the path in Settings.</string>
+    <string name="connection_success">Connection successful!</string>
+    <string name="rsync_available_remote">Rsync is available on the remote server.</string>
+</resources>
