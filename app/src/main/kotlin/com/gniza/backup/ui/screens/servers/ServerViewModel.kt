@@ -3,6 +3,7 @@ package com.gniza.backup.ui.screens.servers
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.content.Context
 import com.gniza.backup.data.repository.ServerRepository
 import com.gniza.backup.domain.model.AuthMethod
 import com.gniza.backup.domain.model.Server
@@ -11,7 +12,11 @@ import com.gniza.backup.service.ssh.SshConnectionTest.ConnectionTestResult
 import com.gniza.backup.service.ssh.SshKeyInfo
 import com.gniza.backup.service.ssh.SshKeyManager
 import com.gniza.backup.ui.util.UiState
+import com.gniza.backup.util.Constants
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import java.io.File
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -29,7 +34,8 @@ class ServerViewModel @Inject constructor(
     private val serverRepository: ServerRepository,
     private val sshConnectionTest: SshConnectionTest,
     private val sshKeyManager: SshKeyManager,
-    private val savedStateHandle: SavedStateHandle
+    private val savedStateHandle: SavedStateHandle,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     val servers: StateFlow<UiState<List<Server>>> = serverRepository.allServers
@@ -138,6 +144,36 @@ class ServerViewModel @Inject constructor(
                     val keyName = "qr_${System.currentTimeMillis()}"
                     sshKeyManager.importKey(keyName, keyBytes)
                     privateKeyPath = sshKeyManager.getPrivateKeyPath(keyName)
+                }
+
+                if (obj.has("croc")) {
+                    val crocCode = obj.getString("croc")
+                    val nativeLibDir = context.applicationInfo.nativeLibraryDir
+                    val crocBinary = File(nativeLibDir, Constants.BUNDLED_CROC_LIB)
+                    if (crocBinary.exists() && crocBinary.canExecute()) {
+                        withContext(Dispatchers.IO) {
+                            val receiveDir = File(context.filesDir, "croc_receive")
+                            receiveDir.mkdirs()
+
+                            val process = ProcessBuilder(
+                                crocBinary.absolutePath, "--yes", "--overwrite", "receive", "--code", crocCode
+                            )
+                                .directory(receiveDir)
+                                .redirectErrorStream(true)
+                                .start()
+
+                            process.waitFor(60, TimeUnit.SECONDS)
+
+                            val receivedFile = receiveDir.listFiles()?.firstOrNull()
+                            if (receivedFile != null && receivedFile.exists()) {
+                                val keyBytes = receivedFile.readBytes()
+                                val keyName = "croc_${System.currentTimeMillis()}"
+                                sshKeyManager.importKey(keyName, keyBytes)
+                                privateKeyPath = sshKeyManager.getPrivateKeyPath(keyName)
+                                receivedFile.delete()
+                            }
+                        }
+                    }
                 }
 
                 val server = Server(

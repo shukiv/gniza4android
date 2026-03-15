@@ -16,4 +16,6 @@ object Constants {
     const val TERMUX_DBCLIENT_PATH = "/data/data/com.termux/files/usr/bin/dbclient"
     const val BUNDLED_SSH_LIB = "libssh.so"
     const val BUNDLED_SSH_BIN = "bin/ssh"
+
+    const val BUNDLED_CROC_LIB = "libcroc.so"
 }

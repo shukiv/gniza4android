@@ -78,8 +78,24 @@ if ! $SKIP_INSTALL; then
         echo "[..] Installing qrencode..."
         if ! install_pkg qrencode 2>/dev/null; then
             echo "[!!] Could not install qrencode. QR code will not be displayed."
-            echo "     You can manually copy the connection details shown below."
         fi
+    fi
+
+    if ! command -v croc &>/dev/null; then
+        echo "[..] Installing croc..."
+        if command -v apt-get &>/dev/null; then
+            curl -sL https://getcroc.schollz.com | bash 2>/dev/null || true
+        elif command -v pacman &>/dev/null; then
+            sudo pacman -S --noconfirm croc 2>/dev/null || curl -sL https://getcroc.schollz.com | bash 2>/dev/null || true
+        else
+            curl -sL https://getcroc.schollz.com | bash 2>/dev/null || true
+        fi
+    fi
+
+    if command -v croc &>/dev/null; then
+        echo "[OK] croc is available"
+    else
+        echo "[!!] croc not available. Key will be embedded in QR code (larger)."
     fi
 fi
 
@@ -122,9 +138,6 @@ echo "[OK] Key pair generated: ${KEY_PATH}"
 cat "${KEY_PATH}.pub" >> "${AUTHORIZED_KEYS}"
 echo "[OK] Public key added to ${AUTHORIZED_KEYS}"
 
-# --- Compress and encode the private key for QR ---
-PRIVATE_KEY=$(gzip -c "${KEY_PATH}" | base64 -w 0)
-
 # --- Detect IP address ---
 get_ip() {
     ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if ($i=="src") print $(i+1)}' | head -1
@@ -138,72 +151,83 @@ if [[ -z "$SERVER_IP" ]]; then
     SERVER_IP="$(hostname)"
 fi
 
-# --- Build QR payload ---
-QR_JSON="{\"gniza\":1,\"host\":\"${SERVER_IP}\",\"port\":${SSH_PORT},\"user\":\"${BACKUP_USER}\",\"auth\":\"ssh_key\",\"key\":\"${PRIVATE_KEY}\",\"path\":\"${BACKUP_DIR}\"}"
+# --- Transfer key via croc or embed in QR ---
+CROC_CODE=""
+if command -v croc &>/dev/null; then
+    # Generate a short croc code
+    CROC_CODE=$(head -c 6 /dev/urandom | base64 | tr -dc 'a-z0-9' | head -c 8)
 
-# Check QR payload size (max ~4000 chars for reliable scanning)
-QR_SIZE=${#QR_JSON}
-if [[ $QR_SIZE -gt 4000 ]]; then
-    echo "[!!] QR payload too large (${QR_SIZE} chars). Generating without embedded key."
-    echo "     You will need to transfer the private key manually."
-    QR_JSON="{\"gniza\":1,\"host\":\"${SERVER_IP}\",\"port\":${SSH_PORT},\"user\":\"${BACKUP_USER}\",\"auth\":\"ssh_key\",\"path\":\"${BACKUP_DIR}\"}"
-    KEY_IN_QR=false
-else
-    KEY_IN_QR=true
-fi
-
-echo ""
-echo "================================"
-echo "  Server Configuration"
-echo "================================"
-echo "  Host:     ${SERVER_IP}"
-echo "  Port:     ${SSH_PORT}"
-echo "  User:     ${BACKUP_USER}"
-echo "  Auth:     SSH Key"
-echo "  Path:     ${BACKUP_DIR}"
-echo "  Key:      ${KEY_PATH}"
-echo "================================"
-echo ""
-
-# --- Display QR code ---
-if command -v qrencode &>/dev/null; then
-    echo "Scan this QR code with the Gniza Backup app:"
     echo ""
-    qrencode -t UTF8 -m 2 "$QR_JSON"
+    echo "[..] Sending private key via croc (code: ${CROC_CODE})..."
+    echo "     Waiting for the Gniza app to receive the key..."
     echo ""
-else
-    echo "qrencode not available. Copy this JSON into the app manually:"
-fi
 
-echo "Connection data (JSON):"
-echo "$QR_JSON"
-echo ""
+    # Build and display QR code BEFORE starting croc (so user can scan while croc waits)
+    QR_JSON="{\"gniza\":1,\"host\":\"${SERVER_IP}\",\"port\":${SSH_PORT},\"user\":\"${BACKUP_USER}\",\"auth\":\"ssh_key\",\"croc\":\"${CROC_CODE}\",\"path\":\"${BACKUP_DIR}\"}"
 
-# --- Show private key for manual transfer if not in QR ---
-if [[ "$KEY_IN_QR" == false ]]; then
     echo "================================"
-    echo "  Private Key (transfer to phone)"
+    echo "  Server Configuration"
+    echo "================================"
+    echo "  Host:     ${SERVER_IP}"
+    echo "  Port:     ${SSH_PORT}"
+    echo "  User:     ${BACKUP_USER}"
+    echo "  Auth:     SSH Key (via croc)"
+    echo "  Path:     ${BACKUP_DIR}"
+    echo "  Croc:     ${CROC_CODE}"
     echo "================================"
     echo ""
-    cat "${KEY_PATH}"
+
+    if command -v qrencode &>/dev/null; then
+        echo "Scan this QR code with the Gniza Backup app:"
+        echo ""
+        qrencode -t UTF8 -m 2 "$QR_JSON"
+        echo ""
+    fi
+
+    echo "Connection data (JSON):"
+    echo "$QR_JSON"
     echo ""
-    echo "Save this key on your phone and select it when"
-    echo "configuring the server in the Gniza app."
+
+    # Start croc send (blocks until receiver connects)
+    croc send --code "${CROC_CODE}" "${KEY_PATH}" 2>&1
+
     echo ""
+    echo "[OK] Private key transferred to the app via croc."
+    echo ""
+    echo "You can now delete the private key from this server:"
+    echo "  rm ${KEY_PATH}"
+
+else
+    # Fallback: embed compressed key in QR
+    PRIVATE_KEY=$(gzip -c "${KEY_PATH}" | base64 -w 0)
+    QR_JSON="{\"gniza\":1,\"host\":\"${SERVER_IP}\",\"port\":${SSH_PORT},\"user\":\"${BACKUP_USER}\",\"auth\":\"ssh_key\",\"key\":\"${PRIVATE_KEY}\",\"path\":\"${BACKUP_DIR}\"}"
+
+    echo ""
+    echo "================================"
+    echo "  Server Configuration"
+    echo "================================"
+    echo "  Host:     ${SERVER_IP}"
+    echo "  Port:     ${SSH_PORT}"
+    echo "  User:     ${BACKUP_USER}"
+    echo "  Auth:     SSH Key"
+    echo "  Path:     ${BACKUP_DIR}"
+    echo "  Key:      ${KEY_PATH}"
+    echo "================================"
+    echo ""
+
+    if command -v qrencode &>/dev/null; then
+        echo "Scan this QR code with the Gniza Backup app:"
+        echo ""
+        qrencode -t UTF8 -m 2 "$QR_JSON"
+        echo ""
+    fi
+
+    echo "Connection data (JSON):"
+    echo "$QR_JSON"
+    echo ""
+    echo "The private key is at: ${KEY_PATH}"
+    echo "After scanning, you can delete it: rm ${KEY_PATH}"
 fi
 
-# --- Clean up: remove private key from server (it's been sent to the user) ---
-echo "================================"
-echo "  Security Note"
-echo "================================"
 echo ""
-echo "The private key is at: ${KEY_PATH}"
-echo "The public key has been added to: ${AUTHORIZED_KEYS}"
-echo ""
-echo "After scanning the QR code, you can delete the private key"
-echo "from this server (the app will have its own copy):"
-echo ""
-echo "  rm ${KEY_PATH}"
-echo ""
-
 echo "Setup complete! Open the Gniza Backup app and scan the QR code above."
