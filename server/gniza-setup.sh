@@ -143,11 +143,21 @@ cat "${KEY_PATH}.pub" >> "${AUTHORIZED_KEYS}"
 echo "[OK] Public key added to ${AUTHORIZED_KEYS}"
 
 # --- Detect IP address ---
+# Prefer the primary (non-secondary, non-dynamic) LAN IP on a physical interface
 get_ip() {
-    ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if ($i=="src") print $(i+1)}' | head -1
+    # Try primary address on eth/wlan/en interfaces (skip docker, veth, tailscale, br-)
+    ip -4 addr show 2>/dev/null | \
+        grep -E 'inet .*(eth|wlan|en|wlp|enp)' | \
+        grep -v 'secondary' | \
+        head -1 | \
+        awk '{print $2}' | cut -d/ -f1
 }
 
 SERVER_IP=$(get_ip)
+if [[ -z "$SERVER_IP" ]]; then
+    # Fallback: route-based detection
+    SERVER_IP=$(ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if ($i=="src") print $(i+1)}' | head -1)
+fi
 if [[ -z "$SERVER_IP" ]]; then
     SERVER_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
 fi
