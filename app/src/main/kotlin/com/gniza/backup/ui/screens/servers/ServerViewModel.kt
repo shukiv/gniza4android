@@ -7,6 +7,8 @@ import android.content.Context
 import com.gniza.backup.data.repository.ServerRepository
 import com.gniza.backup.domain.model.AuthMethod
 import com.gniza.backup.domain.model.Server
+import com.gniza.backup.domain.model.ServerType
+import com.gniza.backup.service.nextcloud.NextcloudConnectionTest
 import com.gniza.backup.service.ssh.SshConnectionTest
 import com.gniza.backup.service.ssh.SshConnectionTest.ConnectionTestResult
 import com.gniza.backup.service.ssh.SshKeyInfo
@@ -34,6 +36,7 @@ import timber.log.Timber
 class ServerViewModel @Inject constructor(
     private val serverRepository: ServerRepository,
     private val sshConnectionTest: SshConnectionTest,
+    private val nextcloudConnectionTest: NextcloudConnectionTest,
     private val sshKeyManager: SshKeyManager,
     private val savedStateHandle: SavedStateHandle,
     @ApplicationContext private val context: Context
@@ -120,6 +123,27 @@ class ServerViewModel @Inject constructor(
     }
 
     private fun validateServer(server: Server): String? {
+        if (server.serverType == ServerType.NEXTCLOUD) {
+            if (server.host.isBlank()) {
+                return "Nextcloud URL must not be empty"
+            }
+            if (server.host.trimEnd('/').let { h ->
+                    !h.startsWith("https://") && !h.startsWith("http://") && h.contains("://")
+                }) {
+                return "Invalid URL scheme"
+            }
+            if (server.username.isBlank()) {
+                return "Username must not be empty"
+            }
+            if (server.username.contains("..") || server.username.contains("/")) {
+                return "Username contains invalid characters"
+            }
+            if (server.password.isNullOrBlank()) {
+                return "App token must not be empty"
+            }
+            return null
+        }
+
         if (server.port !in 1..65535) {
             return "Port must be between 1 and 65535"
         }
@@ -225,7 +249,10 @@ class ServerViewModel @Inject constructor(
         viewModelScope.launch {
             _isTesting.value = true
             _connectionTestResult.value = null
-            _connectionTestResult.value = sshConnectionTest.testConnection(_editServer.value)
+            _connectionTestResult.value = when (_editServer.value.serverType) {
+                ServerType.SSH -> sshConnectionTest.testConnection(_editServer.value)
+                ServerType.NEXTCLOUD -> nextcloudConnectionTest.testConnection(_editServer.value)
+            }
             _isTesting.value = false
         }
     }

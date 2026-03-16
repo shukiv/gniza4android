@@ -10,6 +10,7 @@ data class Server(
     val password: String? = null,
     val privateKeyPath: String? = null,
     val privateKeyPassphrase: String? = null,
+    val serverType: ServerType = ServerType.SSH,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

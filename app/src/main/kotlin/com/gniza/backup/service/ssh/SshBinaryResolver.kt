@@ -56,12 +56,24 @@ class SshBinaryResolver @Inject constructor(
             }
         }
 
-        // 4. Bundled binary from native libs (run directly — nativeLibraryDir is executable)
+        // 4. Bundled Dropbear multi-call binary from native libs
+        // The binary is packaged as libssh.so but needs to be invoked as "dbclient"
+        // so Dropbear knows to act as an SSH client. Create a symlink with the right name.
         val nativeLibDir = context.applicationInfo.nativeLibraryDir
         val bundledLib = File(nativeLibDir, Constants.BUNDLED_SSH_LIB)
         searchedPaths.add(bundledLib.absolutePath)
 
         if (bundledLib.exists() && bundledLib.canExecute()) {
+            val symlink = File(context.filesDir, "dbclient")
+            try {
+                if (!symlink.exists()) {
+                    val pb = ProcessBuilder("ln", "-sf", bundledLib.absolutePath, symlink.absolutePath)
+                    pb.start().waitFor()
+                }
+            } catch (_: Exception) { }
+            if (symlink.exists() && symlink.canExecute()) {
+                return SshBinaryResult.Found(symlink.absolutePath, "bundled", isDropbear = true)
+            }
             return SshBinaryResult.Found(bundledLib.absolutePath, "bundled", isDropbear = true)
         }
 

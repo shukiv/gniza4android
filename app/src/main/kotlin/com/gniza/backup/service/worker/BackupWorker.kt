@@ -1,6 +1,7 @@
 package com.gniza.backup.service.worker
 
 import android.content.Context
+import android.content.pm.ServiceInfo
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
@@ -44,7 +45,7 @@ class BackupWorker @AssistedInject constructor(
             sourceName = source.name,
             progress = "Starting backup..."
         )
-        setForeground(ForegroundInfo(BackupNotificationManager.NOTIFICATION_ID, notification))
+        setForeground(ForegroundInfo(BackupNotificationManager.NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC))
 
         val result = backupExecutor.execute(source, schedule) { output ->
             when (output) {
@@ -54,7 +55,7 @@ class BackupWorker @AssistedInject constructor(
                         progress = "${output.fileName} - ${output.percentage}% (${output.speed})"
                     )
                     setForegroundAsync(
-                        ForegroundInfo(BackupNotificationManager.NOTIFICATION_ID, progressNotification)
+                        ForegroundInfo(BackupNotificationManager.NOTIFICATION_ID, progressNotification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
                     )
                 }
                 else -> { /* Other events handled by executor */ }

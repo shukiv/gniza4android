@@ -8,11 +8,14 @@ import com.gniza.backup.domain.model.BackupLog
 import com.gniza.backup.domain.model.BackupSource
 import com.gniza.backup.domain.model.BackupStatus
 import com.gniza.backup.domain.model.Schedule
+import com.gniza.backup.domain.model.ServerType
+import com.gniza.backup.service.nextcloud.NextcloudSync
 import com.gniza.backup.service.rsync.RsyncBinaryResolver
 import com.gniza.backup.service.rsync.RsyncCommand
 import com.gniza.backup.service.rsync.RsyncEngine
 import com.gniza.backup.service.rsync.RsyncOutput
 import com.gniza.backup.service.ssh.SftpSyncFallback
+import com.gniza.backup.service.ssh.DropbearKeyConverter
 import com.gniza.backup.service.ssh.SshBinaryResolver
 import com.gniza.backup.util.Constants
 import javax.inject.Inject
@@ -22,6 +25,8 @@ class BackupExecutor @Inject constructor(
     private val sshBinaryResolver: SshBinaryResolver,
     private val rsyncEngine: RsyncEngine,
     private val sftpSyncFallback: SftpSyncFallback,
+    private val nextcloudSync: NextcloudSync,
+    private val dropbearKeyConverter: DropbearKeyConverter,
     private val backupLogRepository: BackupLogRepository,
     private val serverRepository: ServerRepository,
     private val backupSourceRepository: BackupSourceRepository
@@ -69,23 +74,26 @@ class BackupExecutor @Inject constructor(
         )
 
         return try {
-            val result = when (val rsyncResult = rsyncBinaryResolver.resolve()) {
-                is RsyncBinaryResolver.RsyncBinaryResult.Found -> {
-                    when (val sshResult = sshBinaryResolver.resolve()) {
-                        is SshBinaryResolver.SshBinaryResult.Found -> {
-                            if (sshResult.isDropbear && server.authMethod == AuthMethod.PASSWORD) {
+            val result = when (server.serverType) {
+                ServerType.NEXTCLOUD -> executeWithNextcloud(source, schedule, server, onProgress)
+                ServerType.SSH -> when (val rsyncResult = rsyncBinaryResolver.resolve()) {
+                    is RsyncBinaryResolver.RsyncBinaryResult.Found -> {
+                        when (val sshResult = sshBinaryResolver.resolve()) {
+                            is SshBinaryResolver.SshBinaryResult.Found -> {
+                                if (sshResult.isDropbear && server.authMethod == AuthMethod.PASSWORD) {
+                                    executeWithSftp(source, schedule, server, onProgress)
+                                } else {
+                                    executeWithRsync(rsyncResult.path, sshResult.path, sshResult.isDropbear, source, schedule, server, onProgress)
+                                }
+                            }
+                            is SshBinaryResolver.SshBinaryResult.NotFound -> {
                                 executeWithSftp(source, schedule, server, onProgress)
-                            } else {
-                                executeWithRsync(rsyncResult.path, sshResult.path, sshResult.isDropbear, source, schedule, server, onProgress)
                             }
                         }
-                        is SshBinaryResolver.SshBinaryResult.NotFound -> {
-                            executeWithSftp(source, schedule, server, onProgress)
-                        }
                     }
-                }
-                is RsyncBinaryResolver.RsyncBinaryResult.NotFound -> {
-                    executeWithSftp(source, schedule, server, onProgress)
+                    is RsyncBinaryResolver.RsyncBinaryResult.NotFound -> {
+                        executeWithSftp(source, schedule, server, onProgress)
+                    }
                 }
             }
 
@@ -253,6 +261,48 @@ class BackupExecutor @Inject constructor(
         )
     }
 
+    private suspend fun executeWithNextcloud(
+        source: BackupSource,
+        schedule: Schedule,
+        server: com.gniza.backup.domain.model.Server,
+        onProgress: (RsyncOutput) -> Unit
+    ): InternalResult {
+        require(!schedule.destinationPath.contains("..")) {
+            "destinationPath must not contain '..' segments"
+        }
+
+        val progressLog = StringBuilder()
+        val nextcloudResult = nextcloudSync.sync(
+            server = server,
+            sourceFolders = source.sourceFolders,
+            destinationPath = schedule.destinationPath,
+            onProgress = { output ->
+                if (output is RsyncOutput.Log) {
+                    progressLog.appendLine(output.line)
+                }
+                onProgress(output)
+            }
+        )
+
+        val outputMsg = buildString {
+            appendLine("Using Nextcloud WebDAV sync")
+            appendLine(progressLog.toString())
+            if (nextcloudResult.success) {
+                appendLine("Transferred ${nextcloudResult.filesTransferred} files")
+            } else {
+                appendLine("Nextcloud error: ${nextcloudResult.errorMessage}")
+            }
+        }
+
+        return InternalResult(
+            success = nextcloudResult.success,
+            filesTransferred = nextcloudResult.filesTransferred,
+            bytesTransferred = nextcloudResult.bytesTransferred,
+            output = outputMsg,
+            errorMessage = nextcloudResult.errorMessage
+        )
+    }
+
     private companion object {
         val SHELL_METACHAR_REGEX = Regex("[;|&\$`\"'\\\\(){}\\[\\]!#~<>?\\s]")
         val SAFE_PATH_REGEX = Regex("^[a-zA-Z0-9/_.:@\\-]+$")
@@ -292,9 +342,14 @@ class BackupExecutor @Inject constructor(
         }
 
         if (server.authMethod == AuthMethod.SSH_KEY && server.privateKeyPath != null) {
-            validatePath(server.privateKeyPath, "privateKeyPath")
+            val keyPath = if (isDropbear) {
+                dropbearKeyConverter.ensureDropbearFormat(server.privateKeyPath)
+            } else {
+                server.privateKeyPath
+            }
+            validatePath(keyPath, "privateKeyPath")
             parts.add("-i")
-            parts.add(server.privateKeyPath)
+            parts.add(keyPath)
         }
 
         return parts.joinToString(" ")

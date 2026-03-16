@@ -59,6 +59,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.gniza.backup.domain.model.AuthMethod
 import com.gniza.backup.domain.model.ScheduleInterval
+import com.gniza.backup.domain.model.ServerType
 import com.gniza.backup.ui.components.GnizaTopAppBar
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -175,6 +176,7 @@ private fun ServerStep(
     val serverUsername by viewModel.serverUsername.collectAsStateWithLifecycle()
     val serverAuthMethod by viewModel.serverAuthMethod.collectAsStateWithLifecycle()
     val serverPassword by viewModel.serverPassword.collectAsStateWithLifecycle()
+    val serverType by viewModel.serverType.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
@@ -188,24 +190,55 @@ private fun ServerStep(
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Enter the connection details for the remote server where your backups will be stored. This is typically a Linux server or NAS that you can access via SSH.",
+            text = if (serverType == ServerType.NEXTCLOUD) {
+                "Enter the connection details for your Nextcloud server. You'll need your server URL, username, and an app token."
+            } else {
+                "Enter the connection details for the remote server where your backups will be stored. This is typically a Linux server or NAS that you can access via SSH."
+            },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.height(16.dp))
 
-        OutlinedButton(
-            onClick = onScanQr,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(
-                imageVector = Icons.Default.CameraAlt,
-                contentDescription = null,
-                modifier = Modifier.padding(end = 8.dp)
-            )
-            Text(text = "Scan QR Code")
+        Text(
+            text = "Server Type",
+            style = MaterialTheme.typography.bodyMedium
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        val typeOptions = ServerType.entries
+        val typeLabels = mapOf(ServerType.SSH to "SSH", ServerType.NEXTCLOUD to "Nextcloud")
+
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            typeOptions.forEachIndexed { index, type ->
+                SegmentedButton(
+                    selected = serverType == type,
+                    onClick = { viewModel.updateServerType(type) },
+                    shape = SegmentedButtonDefaults.itemShape(
+                        index = index,
+                        count = typeOptions.size
+                    )
+                ) {
+                    Text(text = typeLabels[type] ?: type.name)
+                }
+            }
         }
         Spacer(modifier = Modifier.height(16.dp))
+
+        if (serverType == ServerType.SSH) {
+            OutlinedButton(
+                onClick = onScanQr,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CameraAlt,
+                    contentDescription = null,
+                    modifier = Modifier.padding(end = 8.dp)
+                )
+                Text(text = "Scan QR Code")
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
 
         OutlinedTextField(
             value = serverName,
@@ -219,23 +252,25 @@ private fun ServerStep(
         OutlinedTextField(
             value = serverHost,
             onValueChange = { viewModel.updateServerHost(it) },
-            label = { Text(text = "Host") },
+            label = { Text(text = if (serverType == ServerType.NEXTCLOUD) "Nextcloud URL" else "Host") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(modifier = Modifier.height(12.dp))
 
-        OutlinedTextField(
-            value = serverPort.toString(),
-            onValueChange = { input ->
-                input.toIntOrNull()?.let { viewModel.updateServerPort(it) }
-            },
-            label = { Text(text = "Port") },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(12.dp))
+        if (serverType == ServerType.SSH) {
+            OutlinedTextField(
+                value = serverPort.toString(),
+                onValueChange = { input ->
+                    input.toIntOrNull()?.let { viewModel.updateServerPort(it) }
+                },
+                label = { Text(text = "Port") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+        }
 
         OutlinedTextField(
             value = serverUsername,
@@ -246,90 +281,104 @@ private fun ServerStep(
         )
         Spacer(modifier = Modifier.height(12.dp))
 
-        Text(
-            text = "Authentication Method",
-            style = MaterialTheme.typography.bodyMedium
-        )
-        Spacer(modifier = Modifier.height(8.dp))
+        if (serverType == ServerType.SSH) {
+            Text(
+                text = "Authentication Method",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Spacer(modifier = Modifier.height(8.dp))
 
-        val authOptions = AuthMethod.entries
-        val authLabels = listOf("Password", "SSH Key")
+            val authOptions = AuthMethod.entries
+            val authLabels = listOf("Password", "SSH Key")
 
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            authOptions.forEachIndexed { index, method ->
-                SegmentedButton(
-                    selected = serverAuthMethod == method,
-                    onClick = { viewModel.updateServerAuthMethod(method) },
-                    shape = SegmentedButtonDefaults.itemShape(
-                        index = index,
-                        count = authOptions.size
-                    )
-                ) {
-                    Text(text = authLabels[index])
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                authOptions.forEachIndexed { index, method ->
+                    SegmentedButton(
+                        selected = serverAuthMethod == method,
+                        onClick = { viewModel.updateServerAuthMethod(method) },
+                        shape = SegmentedButtonDefaults.itemShape(
+                            index = index,
+                            count = authOptions.size
+                        )
+                    ) {
+                        Text(text = authLabels[index])
+                    }
                 }
             }
-        }
-        Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-        if (serverAuthMethod == AuthMethod.PASSWORD) {
+            if (serverAuthMethod == AuthMethod.PASSWORD) {
+                OutlinedTextField(
+                    value = serverPassword,
+                    onValueChange = { viewModel.updateServerPassword(it) },
+                    label = { Text(text = "Password") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+            } else {
+                val sshKeyGenerated by viewModel.sshKeyGenerated.collectAsStateWithLifecycle()
+                val sshPublicKey by viewModel.sshPublicKey.collectAsStateWithLifecycle()
+                val clipboardManager = LocalClipboardManager.current
+
+                if (!sshKeyGenerated) {
+                    Button(
+                        onClick = { viewModel.generateSshKey() },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.VpnKey,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                        Text(text = "Generate SSH Key")
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "An SSH key pair will be generated. You'll need to copy the public key to your server's ~/.ssh/authorized_keys file.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    Text(
+                        text = "SSH key generated! Copy the public key below and add it to your server's ~/.ssh/authorized_keys file.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = sshPublicKey,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text(text = "Public Key") },
+                        maxLines = 3,
+                        modifier = Modifier.fillMaxWidth(),
+                        trailingIcon = {
+                            IconButton(onClick = {
+                                clipboardManager.setText(AnnotatedString(sshPublicKey))
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Default.ContentCopy,
+                                    contentDescription = "Copy public key"
+                                )
+                            }
+                        }
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+        }
+
+        if (serverType == ServerType.NEXTCLOUD) {
             OutlinedTextField(
                 value = serverPassword,
                 onValueChange = { viewModel.updateServerPassword(it) },
-                label = { Text(text = "Password") },
+                label = { Text(text = "App Token") },
                 singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth()
             )
-            Spacer(modifier = Modifier.height(12.dp))
-        } else {
-            val sshKeyGenerated by viewModel.sshKeyGenerated.collectAsStateWithLifecycle()
-            val sshPublicKey by viewModel.sshPublicKey.collectAsStateWithLifecycle()
-            val clipboardManager = LocalClipboardManager.current
-
-            if (!sshKeyGenerated) {
-                Button(
-                    onClick = { viewModel.generateSshKey() },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.VpnKey,
-                        contentDescription = null,
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
-                    Text(text = "Generate SSH Key")
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "An SSH key pair will be generated. You'll need to copy the public key to your server's ~/.ssh/authorized_keys file.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            } else {
-                Text(
-                    text = "SSH key generated! Copy the public key below and add it to your server's ~/.ssh/authorized_keys file.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = sshPublicKey,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text(text = "Public Key") },
-                    maxLines = 3,
-                    modifier = Modifier.fillMaxWidth(),
-                    trailingIcon = {
-                        IconButton(onClick = {
-                            clipboardManager.setText(AnnotatedString(sshPublicKey))
-                        }) {
-                            Icon(
-                                imageVector = Icons.Default.ContentCopy,
-                                contentDescription = "Copy public key"
-                            )
-                        }
-                    }
-                )
-            }
             Spacer(modifier = Modifier.height(12.dp))
         }
 
@@ -344,7 +393,8 @@ private fun ServerStep(
             }
             Button(
                 onClick = onNext,
-                enabled = !isSaving && serverHost.isNotBlank() && serverUsername.isNotBlank()
+                enabled = !isSaving && serverHost.isNotBlank() && serverUsername.isNotBlank() &&
+                        (serverType != ServerType.NEXTCLOUD || serverPassword.isNotBlank())
             ) {
                 Text(text = "Next")
             }

@@ -14,6 +14,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.OutlinedButton
@@ -50,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.gniza.backup.domain.model.AuthMethod
+import com.gniza.backup.domain.model.ServerType
 import com.gniza.backup.ui.components.GnizaTopAppBar
 import com.gniza.backup.ui.theme.GnizaError
 import com.gniza.backup.ui.theme.GnizaSuccess
@@ -114,7 +117,49 @@ fun ServerEditScreen(
         ) {
             Spacer(modifier = Modifier.height(4.dp))
 
-            if (isNewServer) {
+            Text(
+                text = "Server Type",
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilterChip(
+                    selected = editServer.serverType == ServerType.SSH,
+                    onClick = {
+                        viewModel.updateEditServer(
+                            editServer.copy(serverType = ServerType.SSH)
+                        )
+                    },
+                    label = { Text("SSH") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Dns,
+                            contentDescription = null
+                        )
+                    }
+                )
+
+                FilterChip(
+                    selected = editServer.serverType == ServerType.NEXTCLOUD,
+                    onClick = {
+                        viewModel.updateEditServer(
+                            editServer.copy(serverType = ServerType.NEXTCLOUD)
+                        )
+                    },
+                    label = { Text("Nextcloud") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Cloud,
+                            contentDescription = null
+                        )
+                    }
+                )
+            }
+
+            if (isNewServer && editServer.serverType == ServerType.SSH) {
                 OutlinedButton(
                     onClick = { navController.navigate("qrscanner") },
                     modifier = Modifier.fillMaxWidth()
@@ -140,22 +185,24 @@ fun ServerEditScreen(
             OutlinedTextField(
                 value = editServer.host,
                 onValueChange = { viewModel.updateEditServer(editServer.copy(host = it)) },
-                label = { Text("Host") },
+                label = { Text(if (editServer.serverType == ServerType.NEXTCLOUD) "Nextcloud URL" else "Host") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
 
-            OutlinedTextField(
-                value = editServer.port.toString(),
-                onValueChange = { value ->
-                    val port = value.filter { it.isDigit() }.toIntOrNull() ?: 0
-                    viewModel.updateEditServer(editServer.copy(port = port))
-                },
-                label = { Text("Port") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth()
-            )
+            if (editServer.serverType == ServerType.SSH) {
+                OutlinedTextField(
+                    value = editServer.port.toString(),
+                    onValueChange = { value ->
+                        val port = value.filter { it.isDigit() }.toIntOrNull() ?: 0
+                        viewModel.updateEditServer(editServer.copy(port = port))
+                    },
+                    label = { Text("Port") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
 
             OutlinedTextField(
                 value = editServer.username,
@@ -165,133 +212,147 @@ fun ServerEditScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Text(
-                text = "Authentication Method",
-                style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.padding(top = 4.dp)
-            )
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                FilterChip(
-                    selected = editServer.authMethod == AuthMethod.PASSWORD,
-                    onClick = {
-                        viewModel.updateEditServer(
-                            editServer.copy(authMethod = AuthMethod.PASSWORD)
-                        )
-                    },
-                    label = { Text("Password") },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Default.Lock,
-                            contentDescription = null
-                        )
-                    }
+            if (editServer.serverType == ServerType.SSH) {
+                Text(
+                    text = "Authentication Method",
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(top = 4.dp)
                 )
 
-                FilterChip(
-                    selected = editServer.authMethod == AuthMethod.SSH_KEY,
-                    onClick = {
-                        viewModel.updateEditServer(
-                            editServer.copy(authMethod = AuthMethod.SSH_KEY)
-                        )
-                    },
-                    label = { Text("SSH Key") },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Default.Key,
-                            contentDescription = null
-                        )
-                    }
-                )
-            }
-
-            if (editServer.authMethod == AuthMethod.PASSWORD) {
-                OutlinedTextField(
-                    value = editServer.password ?: "",
-                    onValueChange = { viewModel.updateEditServer(editServer.copy(password = it)) },
-                    label = { Text("Password") },
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-
-            if (editServer.authMethod == AuthMethod.SSH_KEY) {
-                ExposedDropdownMenuBox(
-                    expanded = keyDropdownExpanded,
-                    onExpandedChange = { keyDropdownExpanded = it }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    val selectedKeyName = availableKeys
-                        .find { it.privateKeyPath == editServer.privateKeyPath }
-                        ?.let { "${it.name} (${it.type})" }
-                        ?: ""
-
-                    OutlinedTextField(
-                        value = selectedKeyName,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("SSH Key") },
-                        trailingIcon = {
-                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = keyDropdownExpanded)
+                    FilterChip(
+                        selected = editServer.authMethod == AuthMethod.PASSWORD,
+                        onClick = {
+                            viewModel.updateEditServer(
+                                editServer.copy(authMethod = AuthMethod.PASSWORD)
+                            )
                         },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                        label = { Text("Password") },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = null
+                            )
+                        }
                     )
 
-                    ExposedDropdownMenu(
+                    FilterChip(
+                        selected = editServer.authMethod == AuthMethod.SSH_KEY,
+                        onClick = {
+                            viewModel.updateEditServer(
+                                editServer.copy(authMethod = AuthMethod.SSH_KEY)
+                            )
+                        },
+                        label = { Text("SSH Key") },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Key,
+                                contentDescription = null
+                            )
+                        }
+                    )
+                }
+
+                if (editServer.authMethod == AuthMethod.PASSWORD) {
+                    OutlinedTextField(
+                        value = editServer.password ?: "",
+                        onValueChange = { viewModel.updateEditServer(editServer.copy(password = it)) },
+                        label = { Text("Password") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                if (editServer.authMethod == AuthMethod.SSH_KEY) {
+                    ExposedDropdownMenuBox(
                         expanded = keyDropdownExpanded,
-                        onDismissRequest = { keyDropdownExpanded = false }
+                        onExpandedChange = { keyDropdownExpanded = it }
                     ) {
-                        availableKeys.forEach { keyInfo ->
+                        val selectedKeyName = availableKeys
+                            .find { it.privateKeyPath == editServer.privateKeyPath }
+                            ?.let { "${it.name} (${it.type})" }
+                            ?: ""
+
+                        OutlinedTextField(
+                            value = selectedKeyName,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("SSH Key") },
+                            trailingIcon = {
+                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = keyDropdownExpanded)
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                        )
+
+                        ExposedDropdownMenu(
+                            expanded = keyDropdownExpanded,
+                            onDismissRequest = { keyDropdownExpanded = false }
+                        ) {
+                            availableKeys.forEach { keyInfo ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text(
+                                                text = "${keyInfo.name} (${keyInfo.type})",
+                                                style = MaterialTheme.typography.bodyMedium
+                                            )
+                                            Text(
+                                                text = keyInfo.fingerprint,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    },
+                                    onClick = {
+                                        viewModel.updateEditServer(
+                                            editServer.copy(privateKeyPath = keyInfo.privateKeyPath)
+                                        )
+                                        keyDropdownExpanded = false
+                                    }
+                                )
+                            }
+
                             DropdownMenuItem(
                                 text = {
-                                    Column {
-                                        Text(
-                                            text = "${keyInfo.name} (${keyInfo.type})",
-                                            style = MaterialTheme.typography.bodyMedium
-                                        )
-                                        Text(
-                                            text = keyInfo.fingerprint,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
+                                    Text(
+                                        text = "Generate New Key",
+                                        color = MaterialTheme.colorScheme.primary,
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
                                 },
                                 onClick = {
-                                    viewModel.updateEditServer(
-                                        editServer.copy(privateKeyPath = keyInfo.privateKeyPath)
-                                    )
                                     keyDropdownExpanded = false
+                                    navController.navigate("sshkeys")
                                 }
                             )
                         }
-
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = "Generate New Key",
-                                    color = MaterialTheme.colorScheme.primary,
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            },
-                            onClick = {
-                                keyDropdownExpanded = false
-                                navController.navigate("sshkeys")
-                            }
-                        )
                     }
-                }
 
+                    OutlinedTextField(
+                        value = editServer.privateKeyPassphrase ?: "",
+                        onValueChange = {
+                            viewModel.updateEditServer(editServer.copy(privateKeyPassphrase = it))
+                        },
+                        label = { Text("Key Passphrase") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+
+            if (editServer.serverType == ServerType.NEXTCLOUD) {
                 OutlinedTextField(
-                    value = editServer.privateKeyPassphrase ?: "",
-                    onValueChange = {
-                        viewModel.updateEditServer(editServer.copy(privateKeyPassphrase = it))
-                    },
-                    label = { Text("Key Passphrase") },
+                    value = editServer.password ?: "",
+                    onValueChange = { viewModel.updateEditServer(editServer.copy(password = it)) },
+                    label = { Text("App Token") },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -360,13 +421,20 @@ fun ServerEditScreen(
                             style = MaterialTheme.typography.bodyMedium,
                             color = if (result.success) GnizaSuccess else GnizaError
                         )
-                        if (result.success) {
+                        if (result.success && editServer.serverType == ServerType.SSH) {
                             Text(
                                 text = if (result.rsyncAvailable) {
                                     "rsync is available on server"
                                 } else {
                                     "rsync not found - SFTP fallback will be used"
                                 },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (result.success && editServer.serverType == ServerType.NEXTCLOUD) {
+                            Text(
+                                text = "WebDAV sync will be used",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

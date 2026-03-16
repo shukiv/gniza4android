@@ -11,6 +11,7 @@ import com.gniza.backup.domain.model.BackupSource
 import com.gniza.backup.domain.model.Schedule
 import com.gniza.backup.domain.model.ScheduleInterval
 import com.gniza.backup.domain.model.Server
+import com.gniza.backup.domain.model.ServerType
 import com.gniza.backup.service.ssh.SshKeyManager
 import com.gniza.backup.util.Constants
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -49,6 +50,8 @@ class SetupWizardViewModel @Inject constructor(
     val serverAuthMethod: StateFlow<AuthMethod> = _serverAuthMethod.asStateFlow()
     private val _serverPassword = MutableStateFlow("")
     val serverPassword: StateFlow<String> = _serverPassword.asStateFlow()
+    private val _serverType = MutableStateFlow(ServerType.SSH)
+    val serverType: StateFlow<ServerType> = _serverType.asStateFlow()
 
     private val _sourceName = MutableStateFlow("")
     val sourceName: StateFlow<String> = _sourceName.asStateFlow()
@@ -77,6 +80,7 @@ class SetupWizardViewModel @Inject constructor(
     fun updateServerUsername(v: String) { _serverUsername.value = v }
     fun updateServerAuthMethod(v: AuthMethod) { _serverAuthMethod.value = v }
     fun updateServerPassword(v: String) { _serverPassword.value = v }
+    fun updateServerType(v: ServerType) { _serverType.value = v }
     fun updateSourceName(v: String) { _sourceName.value = v }
     fun updateSourceFolders(v: List<String>) { _sourceFolders.value = v }
     fun updateScheduleName(v: String) { _scheduleName.value = v }
@@ -149,10 +153,11 @@ class SetupWizardViewModel @Inject constructor(
                         port = _serverPort.value,
                         username = _serverUsername.value,
                         authMethod = _serverAuthMethod.value,
-                        password = if (_serverAuthMethod.value == AuthMethod.PASSWORD) _serverPassword.value else null,
-                        privateKeyPath = if (_serverAuthMethod.value == AuthMethod.SSH_KEY && generatedKeyName.isNotEmpty()) {
+                        password = if (_serverType.value == ServerType.NEXTCLOUD || _serverAuthMethod.value == AuthMethod.PASSWORD) _serverPassword.value else null,
+                        privateKeyPath = if (_serverType.value == ServerType.SSH && _serverAuthMethod.value == AuthMethod.SSH_KEY && generatedKeyName.isNotEmpty()) {
                             sshKeyManager.getPrivateKeyPath(generatedKeyName)
-                        } else null
+                        } else null,
+                        serverType = _serverType.value
                     )
                     savedServerId = serverRepository.saveServer(server)
                     _currentStep.value = 2

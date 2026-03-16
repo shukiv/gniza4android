@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
@@ -47,6 +48,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.gniza.backup.domain.model.AuthMethod
 import com.gniza.backup.domain.model.Server
+import com.gniza.backup.domain.model.ServerType
 import com.gniza.backup.ui.components.ConfirmDialog
 import com.gniza.backup.ui.components.EmptyState
 import com.gniza.backup.ui.components.GnizaTopAppBar
@@ -216,15 +218,21 @@ private fun ServerListItem(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = if (server.authMethod == AuthMethod.PASSWORD) {
-                        Icons.Default.Lock
-                    } else {
-                        Icons.Default.Key
+                    imageVector = when (server.serverType) {
+                        ServerType.NEXTCLOUD -> Icons.Default.Cloud
+                        ServerType.SSH -> if (server.authMethod == AuthMethod.PASSWORD) {
+                            Icons.Default.Lock
+                        } else {
+                            Icons.Default.Key
+                        }
                     },
-                    contentDescription = if (server.authMethod == AuthMethod.PASSWORD) {
-                        "Password authentication"
-                    } else {
-                        "SSH key authentication"
+                    contentDescription = when (server.serverType) {
+                        ServerType.NEXTCLOUD -> "Nextcloud server"
+                        ServerType.SSH -> if (server.authMethod == AuthMethod.PASSWORD) {
+                            "Password authentication"
+                        } else {
+                            "SSH key authentication"
+                        }
                     },
                     tint = MaterialTheme.colorScheme.primary
                 )
@@ -235,7 +243,11 @@ private fun ServerListItem(
                         style = MaterialTheme.typography.titleMedium
                     )
                     Text(
-                        text = "${server.host}:${server.port}",
+                        text = if (server.serverType == ServerType.NEXTCLOUD) {
+                            server.host
+                        } else {
+                            "${server.host}:${server.port}"
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

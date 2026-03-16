@@ -1,12 +1,13 @@
 # Gniza
 
-Android backup solution that automatically backs up folders from your device to a remote server using rsync for efficient incremental transfers. Bundles rsync and SSH (Dropbear) binaries — no Termux or root required.
+Android backup solution that automatically backs up folders from your device to a remote server. Supports SSH servers (rsync/SFTP) and Nextcloud (WebDAV). Bundles rsync and SSH (Dropbear) binaries — no Termux or root required.
 
 ## Features
 
 - **Bundled rsync + SSH binaries** — ships with rsync and Dropbear dbclient for arm64-v8a, armeabi-v7a, and x86_64
 - **Scheduled backups** — hourly, daily, or weekly via WorkManager with Wi-Fi-only and charging constraints
-- **SFTP fallback** — automatic fallback when rsync is unavailable on the server
+- **Nextcloud support** — back up to Nextcloud via WebDAV with incremental sync (size-based comparison)
+- **SFTP fallback** — automatic fallback when rsync is unavailable on the SSH server
 - **SSH key management** — generate RSA, DSA, ECDSA, or Ed25519 key pairs directly in the app
 - **QR code server setup** — run `gniza-setup.sh` on your server and scan the QR code to auto-configure
 - **Setup wizard** — first-launch guided setup: Server → Source → Schedule
@@ -50,22 +51,37 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 
 On first launch, the setup wizard guides you through:
 
-1. **Add a Server** — scan the QR code from the setup script, or enter connection details manually
+1. **Add a Server** — choose SSH or Nextcloud, then scan a QR code or enter connection details manually
 2. **Create a Source** — pick folders to back up from your device
 3. **Set Up a Schedule** — choose backup frequency (hourly, daily, weekly)
 
+**Nextcloud servers** require the HTTPS server URL, your username, and an [app token](https://docs.nextcloud.com/server/latest/user_manual/en/session_management.html#managing-devices) (Settings > Security > Devices & sessions).
+
 ## How It Works
 
-Gniza uses rsync over SSH for efficient incremental backups. Only changed files are transferred after the first backup.
+Gniza supports two backup destination types:
+
+- **SSH servers** — uses rsync over SSH for efficient incremental transfers (with SFTP as a fallback)
+- **Nextcloud** — uses WebDAV to upload files, skipping those whose size already matches on the server
 
 ```
-Android Device                    Remote Server
+Android Device                    SSH Server
 ┌──────────────┐                 ┌──────────────┐
 │  Source       │   rsync/SSH    │  Destination  │
 │  Folders      │ ─────────────> │  Directory    │
 │              │                 │              │
 │  /DCIM       │  incremental   │  ~/backups   │
 │  /Documents  │  transfer      │              │
+│  /Downloads  │                 │              │
+└──────────────┘                 └──────────────┘
+
+Android Device                    Nextcloud
+┌──────────────┐                 ┌──────────────┐
+│  Source       │   WebDAV/HTTPS │  Destination  │
+│  Folders      │ ─────────────> │  Directory    │
+│              │                 │              │
+│  /DCIM       │  size-based    │  /backups    │
+│  /Documents  │  sync          │              │
 │  /Downloads  │                 │              │
 └──────────────┘                 └──────────────┘
 ```
@@ -75,9 +91,11 @@ Android Device                    Remote Server
 | Binary | Search order |
 |--------|-------------|
 | rsync  | User override → System paths → Termux → Bundled `librsync.so` |
-| SSH    | System SSH → Termux SSH → Bundled Dropbear `libssh.so` |
+| SSH    | System SSH → Termux SSH → System dbclient → Bundled Dropbear `libssh.so` (via `dbclient` symlink) |
 
-If rsync or SSH is unavailable, Gniza falls back to SFTP (via JSch).
+The bundled Dropbear binary is a multi-call executable packaged as `libssh.so`. At runtime, the app creates a `dbclient` symlink so Dropbear recognizes its SSH client mode. The binary is dynamically linked (required for Android 14+) and supports PEM, OpenSSH, and Dropbear-native key formats.
+
+If rsync or SSH is unavailable, Gniza falls back to SFTP (via JSch). For Nextcloud servers, files are transferred via WebDAV using OkHttp.
 
 ## Architecture
 
@@ -91,6 +109,7 @@ com.gniza.backup
 ├── domain/model       # Domain models (Server, BackupSource, Schedule, BackupLog)
 ├── service
 │   ├── backup         # BackupExecutor, notifications
+│   ├── nextcloud      # NextcloudSync, NextcloudConnectionTest (WebDAV)
 │   ├── rsync          # RsyncBinaryResolver, RsyncCommand, RsyncEngine
 │   ├── ssh            # SshKeyManager, SshBinaryResolver, SftpSyncFallback
 │   └── worker         # BackupWorker, BackupScheduler (WorkManager)
@@ -120,6 +139,7 @@ com.gniza.backup
 | Hilt | Dependency injection |
 | WorkManager | Scheduled background backups |
 | JSch | SSH/SFTP connections, key generation |
+| OkHttp | Nextcloud WebDAV communication |
 | CameraX + ML Kit | QR code scanning |
 | android-rsync | Bundled rsync binaries |
 
@@ -154,7 +174,7 @@ The script displays a QR code in the terminal that the Gniza app can scan to aut
 
 | Permission | Reason |
 |------------|--------|
-| `INTERNET` | Connect to SSH servers |
+| `INTERNET` | Connect to SSH and Nextcloud servers |
 | `CAMERA` | Scan QR codes for server setup |
 | `ACCESS_NETWORK_STATE` | Check network before backups |
 | `ACCESS_WIFI_STATE` | Enforce Wi-Fi-only constraint |
@@ -174,6 +194,55 @@ The script displays a QR code in the terminal that the Gniza app can scan to aut
 ```bash
 ./gradlew assembleDebug    # Debug build
 ./gradlew assembleRelease  # Release build (requires signing config)
+```
+
+### Building Dropbear from source
+
+The bundled SSH binary (`libssh.so`) is Dropbear 2024.86 cross-compiled with NDK r27. It must be **dynamically linked** (static-pie executables segfault on Android 14+) and include **key import support** (PEM/OpenSSH formats).
+
+Build for all architectures:
+
+```bash
+TOOLCHAIN="$ANDROID_HOME/ndk/27.0.12077973/toolchains/llvm/prebuilt/linux-x86_64"
+
+# For each arch: arm64-v8a (aarch64-linux-android), armeabi-v7a (armv7a-linux-androideabi), x86_64 (x86_64-linux-android)
+export CC="$TOOLCHAIN/bin/aarch64-linux-android28-clang"
+export AR="$TOOLCHAIN/bin/llvm-ar"
+export RANLIB="$TOOLCHAIN/bin/llvm-ranlib"
+export STRIP="$TOOLCHAIN/bin/llvm-strip"
+
+cd dropbear-2024.86
+
+./configure --host=aarch64-linux-android \
+    --disable-zlib --disable-syslog --disable-lastlog \
+    --disable-utmp --disable-utmpx --disable-wtmp \
+    --disable-pututline --disable-pututxline
+
+# Disable server password auth (no crypt() on Android)
+sed -i 's/^#define DROPBEAR_SVR_PASSWORD_AUTH 1/#define DROPBEAR_SVR_PASSWORD_AUTH 0/' src/default_options.h
+
+# Add keyimport support to dbclient (for PEM/OpenSSH key formats)
+sed -i 's/^_CLIOBJS=cli-main.o/_CLIOBJS=keyimport.o signkey_ossh.o cli-main.o/' Makefile.in
+
+# Patch loadidentityfile() to try import_read() as fallback (see build script)
+
+# Stub getpass() for Android (see build script)
+
+make PROGRAMS="dbclient" MULTI=1 -j$(nproc)
+$STRIP dropbearmulti
+cp dropbearmulti app/src/main/jniLibs/arm64-v8a/libssh.so
+```
+
+The full build script with all patches is at `scripts/build-dropbear.sh`:
+
+```bash
+# Download Dropbear source
+curl -sL https://matt.ucc.asn.au/dropbear/releases/dropbear-2024.86.tar.bz2 | tar xj -C /tmp
+
+# Build all architectures
+./scripts/build-dropbear.sh arm64-v8a aarch64-linux-android
+./scripts/build-dropbear.sh armeabi-v7a armv7a-linux-androideabi
+./scripts/build-dropbear.sh x86_64 x86_64-linux-android
 ```
 
 ## License

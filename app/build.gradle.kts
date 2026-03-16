@@ -90,6 +90,7 @@ dependencies {
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
     implementation(libs.hilt.work)
+    ksp(libs.hilt.work.compiler)
 
     // WorkManager
     implementation(libs.work.runtime.ktx)
@@ -107,6 +108,9 @@ dependencies {
 
     // Rsync binary
     implementation("com.nerdoftheherd:android-rsync:3.4.1")
+
+    // OkHttp (WebDAV for Nextcloud)
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     // Logging
     implementation(libs.timber)
