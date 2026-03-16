@@ -143,12 +143,16 @@ class QrScannerViewModel @Inject constructor(
             receiveDir.mkdirs()
 
             val pb = ProcessBuilder(
-                wormholeBinary.absolutePath, "recv", "--hide-progress", "-o", receiveDir.absolutePath, wormholeCode
+                wormholeBinary.absolutePath, "recv", "--hide-progress", wormholeCode
             )
             pb.environment()["HOME"] = context.filesDir.absolutePath
             pb.redirectErrorStream(true)
             pb.directory(receiveDir)
             val process = pb.start()
+            // Auto-accept the file transfer
+            process.outputStream.write("y\n".toByteArray())
+            process.outputStream.flush()
+            process.outputStream.close()
 
             process.inputStream.bufferedReader().readText()
             val finished = process.waitFor(60, TimeUnit.SECONDS)

@@ -241,12 +241,16 @@ class ServerViewModel @Inject constructor(
             timber.log.Timber.d("Wormhole receive: code=$wormholeCode, out=${receiveDir.absolutePath}")
 
             val pb = ProcessBuilder(
-                wormholeBinary.absolutePath, "recv", "--hide-progress", "-o", receiveDir.absolutePath, wormholeCode
+                wormholeBinary.absolutePath, "recv", "--hide-progress", wormholeCode
             )
             pb.environment()["HOME"] = context.filesDir.absolutePath
             pb.redirectErrorStream(true)
             pb.directory(receiveDir)
             val process = pb.start()
+            // Auto-accept the file transfer
+            process.outputStream.write("y\n".toByteArray())
+            process.outputStream.flush()
+            process.outputStream.close()
 
             // Read process output for debugging
             val output = process.inputStream.bufferedReader().readText()

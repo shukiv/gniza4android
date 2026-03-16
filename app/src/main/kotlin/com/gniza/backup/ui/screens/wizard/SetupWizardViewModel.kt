@@ -196,7 +196,7 @@ class SetupWizardViewModel @Inject constructor(
             receiveDir.mkdirs()
 
             val env = ProcessBuilder(
-                wormholeBinary.absolutePath, "recv", "--hide-progress", "-o", receiveDir.absolutePath, wormholeCode
+                wormholeBinary.absolutePath, "recv", "--hide-progress", wormholeCode
             )
             env.environment()["HOME"] = context.filesDir.absolutePath
             env.redirectErrorStream(true)
