@@ -39,6 +39,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -71,15 +72,14 @@ fun ServerEditScreen(
 
     val isNewServer = serverId == 0L
 
-    val qrResult = navController.currentBackStackEntry
-        ?.savedStateHandle
-        ?.getStateFlow<String?>("qr_result", null)
-        ?.collectAsState()
+    val savedStateHandle = navController.currentBackStackEntry?.savedStateHandle
+    val qrResult by savedStateHandle?.getLiveData<String>("qr_result")
+        ?.observeAsState() ?: remember { mutableStateOf(null) }
 
-    LaunchedEffect(qrResult?.value) {
-        qrResult?.value?.let { json ->
+    LaunchedEffect(qrResult) {
+        qrResult?.let { json ->
             viewModel.applyQrDataToEdit(json)
-            navController.currentBackStackEntry?.savedStateHandle?.remove<String>("qr_result")
+            savedStateHandle?.remove<String>("qr_result")
         }
     }
 

@@ -228,33 +228,54 @@ class ServerViewModel @Inject constructor(
     private suspend fun receiveCrocKey(crocCode: String): String? {
         val nativeLibDir = context.applicationInfo.nativeLibraryDir
         val crocBinary = File(nativeLibDir, Constants.BUNDLED_CROC_LIB)
-        if (!crocBinary.exists() || !crocBinary.canExecute()) return null
+        if (!crocBinary.exists() || !crocBinary.canExecute()) {
+            timber.log.Timber.e("Croc binary not found or not executable: ${crocBinary.absolutePath}")
+            return null
+        }
 
         return withContext(Dispatchers.IO) {
             val receiveDir = File(context.filesDir, "croc_receive")
             receiveDir.listFiles()?.forEach { it.delete() }
             receiveDir.mkdirs()
 
-            val env = ProcessBuilder(
+            timber.log.Timber.d("Croc receive: code=$crocCode, out=${receiveDir.absolutePath}")
+
+            val pb = ProcessBuilder(
                 crocBinary.absolutePath, "--yes", "--overwrite", "--out", receiveDir.absolutePath
             )
-            env.environment()["HOME"] = context.filesDir.absolutePath
-            env.environment()["CROC_SECRET"] = crocCode
-            env.redirectErrorStream(true)
-            val process = env.start()
+            pb.environment()["HOME"] = context.filesDir.absolutePath
+            pb.environment()["CROC_SECRET"] = crocCode
+            pb.redirectErrorStream(true)
+            pb.directory(receiveDir)
+            val process = pb.start()
+
+            // Read process output for debugging
+            val output = process.inputStream.bufferedReader().readText()
+            timber.log.Timber.d("Croc output: $output")
 
             val finished = process.waitFor(60, TimeUnit.SECONDS)
-            if (!finished) process.destroyForcibly()
+            if (!finished) {
+                timber.log.Timber.e("Croc timed out")
+                process.destroyForcibly()
+            }
 
-            val receivedFile = receiveDir.listFiles()?.firstOrNull { it.isFile }
-            if (receivedFile != null && receivedFile.exists() && receivedFile.length() > 0) {
+            val exitCode = try { process.exitValue() } catch (_: Exception) { -1 }
+            timber.log.Timber.d("Croc exit code: $exitCode")
+
+            val files = receiveDir.listFiles()
+            timber.log.Timber.d("Croc received files: ${files?.map { "${it.name} (${it.length()})" }}")
+
+            val receivedFile = files?.firstOrNull { it.isFile && it.length() > 0 }
+            if (receivedFile != null) {
                 val keyBytes = receivedFile.readBytes()
                 val keyName = "croc_${System.currentTimeMillis()}"
+                timber.log.Timber.d("Importing key: $keyName (${keyBytes.size} bytes)")
                 sshKeyManager.importKey(keyName, keyBytes)
                 val path = sshKeyManager.getPrivateKeyPath(keyName)
                 receivedFile.delete()
                 path
             } else {
+                timber.log.Timber.e("No file received via croc")
                 null
             }
         }

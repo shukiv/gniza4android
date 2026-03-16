@@ -189,7 +189,8 @@ if command -v croc &>/dev/null; then
     echo ""
 
     # Start croc send in background, then show QR
-    CROC_SECRET="${CROC_CODE}" croc send "${KEY_PATH}" > /dev/null 2>&1 &
+    # Pipe via stdin — croc v10 ignores file args when CROC_SECRET is set
+    cat "${KEY_PATH}" | CROC_SECRET="${CROC_CODE}" croc send > /dev/null 2>&1 &
     CROC_PID=$!
 
     echo "After scanning the QR code, the private key will be"
