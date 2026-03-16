@@ -101,10 +101,10 @@ class QrScannerViewModel @Inject constructor(
                     privateKeyPath = sshKeyManager.getPrivateKeyPath(keyName)
                 }
 
-                // Handle croc key transfer
-                if (obj.has("croc")) {
-                    val crocCode = obj.getString("croc")
-                    privateKeyPath = receiveCrocKey(crocCode)
+                // Handle wormhole key transfer
+                if (obj.has("wormhole")) {
+                    val wormholeCode = obj.getString("wormhole")
+                    privateKeyPath = receiveWormholeKey(wormholeCode)
                 }
 
                 val server = Server(
@@ -132,26 +132,24 @@ class QrScannerViewModel @Inject constructor(
         }
     }
 
-    private suspend fun receiveCrocKey(crocCode: String): String? {
+    private suspend fun receiveWormholeKey(wormholeCode: String): String? {
         val nativeLibDir = context.applicationInfo.nativeLibraryDir
-        val crocBinary = File(nativeLibDir, Constants.BUNDLED_CROC_LIB)
-        if (!crocBinary.exists() || !crocBinary.canExecute()) return null
+        val wormholeBinary = File(nativeLibDir, Constants.BUNDLED_WORMHOLE_LIB)
+        if (!wormholeBinary.exists() || !wormholeBinary.canExecute()) return null
 
         return withContext(Dispatchers.IO) {
-            val receiveDir = File(context.filesDir, "croc_receive")
+            val receiveDir = File(context.filesDir, "wormhole_receive")
             receiveDir.listFiles()?.forEach { it.delete() }
             receiveDir.mkdirs()
 
             val pb = ProcessBuilder(
-                crocBinary.absolutePath, "--yes", "--overwrite", "--out", receiveDir.absolutePath
+                wormholeBinary.absolutePath, "recv", "--hide-progress", "-o", receiveDir.absolutePath, wormholeCode
             )
             pb.environment()["HOME"] = context.filesDir.absolutePath
-            pb.environment()["CROC_SECRET"] = crocCode
             pb.redirectErrorStream(true)
             pb.directory(receiveDir)
             val process = pb.start()
 
-            // Read output (blocks until done)
             process.inputStream.bufferedReader().readText()
             val finished = process.waitFor(60, TimeUnit.SECONDS)
             if (!finished) process.destroyForcibly()
@@ -159,7 +157,7 @@ class QrScannerViewModel @Inject constructor(
             val receivedFile = receiveDir.listFiles()?.firstOrNull { it.isFile && it.length() > 0 }
             if (receivedFile != null) {
                 val keyBytes = receivedFile.readBytes()
-                val keyName = "croc_${System.currentTimeMillis()}"
+                val keyName = "wh_${System.currentTimeMillis()}"
                 sshKeyManager.importKey(keyName, keyBytes)
                 val path = sshKeyManager.getPrivateKeyPath(keyName)
                 receivedFile.delete()

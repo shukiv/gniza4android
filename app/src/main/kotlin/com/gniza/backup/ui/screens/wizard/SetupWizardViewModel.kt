@@ -109,10 +109,10 @@ class SetupWizardViewModel @Inject constructor(
                     _sshKeyGenerated.value = true
                 }
 
-                // Receive private key via croc transfer
-                if (obj.has("croc")) {
-                    val crocCode = obj.getString("croc")
-                    val keyPath = receiveCrocKey(crocCode)
+                // Receive private key via wormhole transfer
+                if (obj.has("wormhole")) {
+                    val wormholeCode = obj.getString("wormhole")
+                    val keyPath = receiveWormholeKey(wormholeCode)
                     if (keyPath != null) {
                         val keyName = File(keyPath).name
                         generatedKeyName = keyName
@@ -185,21 +185,20 @@ class SetupWizardViewModel @Inject constructor(
         }
     }
 
-    private suspend fun receiveCrocKey(crocCode: String): String? {
+    private suspend fun receiveWormholeKey(wormholeCode: String): String? {
         val nativeLibDir = context.applicationInfo.nativeLibraryDir
-        val crocBinary = File(nativeLibDir, Constants.BUNDLED_CROC_LIB)
-        if (!crocBinary.exists() || !crocBinary.canExecute()) return null
+        val wormholeBinary = File(nativeLibDir, Constants.BUNDLED_WORMHOLE_LIB)
+        if (!wormholeBinary.exists() || !wormholeBinary.canExecute()) return null
 
         return withContext(Dispatchers.IO) {
-            val receiveDir = File(context.filesDir, "croc_receive")
+            val receiveDir = File(context.filesDir, "wormhole_receive")
             receiveDir.listFiles()?.forEach { it.delete() }
             receiveDir.mkdirs()
 
             val env = ProcessBuilder(
-                crocBinary.absolutePath, "--yes", "--overwrite", "--out", receiveDir.absolutePath
+                wormholeBinary.absolutePath, "recv", "--hide-progress", "-o", receiveDir.absolutePath, wormholeCode
             )
             env.environment()["HOME"] = context.filesDir.absolutePath
-            env.environment()["CROC_SECRET"] = crocCode
             env.redirectErrorStream(true)
             val process = env.start()
 
@@ -209,7 +208,7 @@ class SetupWizardViewModel @Inject constructor(
             val receivedFile = receiveDir.listFiles()?.firstOrNull { it.isFile }
             if (receivedFile != null && receivedFile.exists() && receivedFile.length() > 0) {
                 val keyBytes = receivedFile.readBytes()
-                val keyName = "croc_${System.currentTimeMillis()}"
+                val keyName = "wh_${System.currentTimeMillis()}"
                 sshKeyManager.importKey(keyName, keyBytes)
                 val path = sshKeyManager.getPrivateKeyPath(keyName)
                 receivedFile.delete()

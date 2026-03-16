@@ -85,6 +85,27 @@ if ! $SKIP_INSTALL; then
         fi
     fi
 
+    # --- Install wormhole-william ---
+    if ! command -v wormhole-william &>/dev/null; then
+        echo "[..] Installing wormhole-william..."
+        WW_ARCH=$(uname -m)
+        case "$WW_ARCH" in
+            x86_64|amd64) WW_ARCH="amd64" ;;
+            aarch64|arm64) WW_ARCH="arm64" ;;
+            armv7l|armhf) WW_ARCH="armv6" ;;
+            *) WW_ARCH="" ;;
+        esac
+        if [[ -n "$WW_ARCH" ]]; then
+            WW_URL="https://github.com/psanford/wormhole-william/releases/latest/download/wormhole-william-linux-${WW_ARCH}"
+            curl -sL "$WW_URL" -o /usr/local/bin/wormhole-william 2>/dev/null && chmod +x /usr/local/bin/wormhole-william
+        fi
+    fi
+
+    if command -v wormhole-william &>/dev/null; then
+        echo "[OK] wormhole-william is available"
+    else
+        echo "[!!] wormhole-william not available. Key will be embedded in QR code."
+    fi
 fi
 
 # --- Ensure SSH is running ---
@@ -117,7 +138,7 @@ KEY_PATH="${SSH_DIR}/${KEY_NAME}"
 
 echo ""
 echo "[..] Generating SSH key pair..."
-ssh-keygen -t rsa -b 2048 -m PEM -f "${KEY_PATH}" -N "" -C "gniza-backup" -q
+ssh-keygen -t ed25519 -f "${KEY_PATH}" -N "" -C "gniza-backup" -q
 chmod 600 "${KEY_PATH}"
 chmod 644 "${KEY_PATH}.pub"
 echo "[OK] Key pair generated: ${KEY_PATH}"
@@ -151,28 +172,87 @@ fi
 
 SERVER_HOSTNAME="$(hostname)"
 
-# --- Embed key in QR code ---
-PRIVATE_KEY=$(gzip -c "${KEY_PATH}" | base64 -w 0)
-QR_JSON="{\"gniza\":1,\"name\":\"${SERVER_HOSTNAME}\",\"host\":\"${SERVER_IP}\",\"port\":${SSH_PORT},\"user\":\"${BACKUP_USER}\",\"auth\":\"ssh_key\",\"key\":\"${PRIVATE_KEY}\",\"path\":\"${BACKUP_DIR}\"}"
+# --- Transfer key via wormhole or embed in QR ---
+if command -v wormhole-william &>/dev/null; then
+    # Send key via wormhole in background, capture the code
+    WH_OUTPUT=$(mktemp)
+    wormhole-william send "${KEY_PATH}" > "$WH_OUTPUT" 2>&1 &
+    WH_PID=$!
 
-echo ""
-echo "================================"
-echo "  Server Configuration"
-echo "================================"
-echo "  Host:     ${SERVER_IP}"
-echo "  Port:     ${SSH_PORT}"
-echo "  User:     ${BACKUP_USER}"
-echo "  Auth:     SSH Key"
-echo "  Path:     ${BACKUP_DIR}"
-echo "================================"
-echo ""
-echo "After scanning, you can delete the private key: rm ${KEY_PATH}"
-echo ""
+    # Wait for the code to appear
+    WH_CODE=""
+    for i in $(seq 1 10); do
+        sleep 1
+        WH_CODE=$(grep -oP 'Wormhole code is: \K.*' "$WH_OUTPUT" 2>/dev/null || grep -oP 'wormhole receive \K.*' "$WH_OUTPUT" 2>/dev/null)
+        [[ -n "$WH_CODE" ]] && break
+    done
+    rm -f "$WH_OUTPUT"
 
-if command -v qrencode &>/dev/null; then
-    echo "Scan this QR code with the Gniza Backup app:"
+    if [[ -n "$WH_CODE" ]]; then
+        QR_JSON="{\"gniza\":1,\"name\":\"${SERVER_HOSTNAME}\",\"host\":\"${SERVER_IP}\",\"port\":${SSH_PORT},\"user\":\"${BACKUP_USER}\",\"auth\":\"ssh_key\",\"wormhole\":\"${WH_CODE}\",\"path\":\"${BACKUP_DIR}\"}"
+
+        echo ""
+        echo "================================"
+        echo "  Server Configuration"
+        echo "================================"
+        echo "  Host:     ${SERVER_IP}"
+        echo "  Port:     ${SSH_PORT}"
+        echo "  User:     ${BACKUP_USER}"
+        echo "  Auth:     SSH Key (via wormhole)"
+        echo "  Path:     ${BACKUP_DIR}"
+        echo "  Code:     ${WH_CODE}"
+        echo "================================"
+        echo ""
+        echo "After scanning, you can delete the private key: rm ${KEY_PATH}"
+        echo ""
+
+        if command -v qrencode &>/dev/null; then
+            echo "Scan this QR code with the Gniza Backup app:"
+            echo ""
+            qrencode -t UTF8 -m 2 "$QR_JSON"
+        fi
+
+        echo ""
+        echo "Waiting for the Gniza app to receive the key..."
+        wait $WH_PID 2>/dev/null
+        echo "[OK] Private key transferred."
+    else
+        kill $WH_PID 2>/dev/null
+        echo "[!!] Failed to get wormhole code. Falling back to embedded key."
+        # Fall through to embedded key below
+        PRIVATE_KEY=$(gzip -c "${KEY_PATH}" | base64 -w 0)
+        QR_JSON="{\"gniza\":1,\"name\":\"${SERVER_HOSTNAME}\",\"host\":\"${SERVER_IP}\",\"port\":${SSH_PORT},\"user\":\"${BACKUP_USER}\",\"auth\":\"ssh_key\",\"key\":\"${PRIVATE_KEY}\",\"path\":\"${BACKUP_DIR}\"}"
+
+        if command -v qrencode &>/dev/null; then
+            echo "Scan this QR code with the Gniza Backup app:"
+            echo ""
+            qrencode -t UTF8 -m 2 "$QR_JSON"
+        fi
+    fi
+else
+    # Fallback: embed compressed key in QR
+    PRIVATE_KEY=$(gzip -c "${KEY_PATH}" | base64 -w 0)
+    QR_JSON="{\"gniza\":1,\"name\":\"${SERVER_HOSTNAME}\",\"host\":\"${SERVER_IP}\",\"port\":${SSH_PORT},\"user\":\"${BACKUP_USER}\",\"auth\":\"ssh_key\",\"key\":\"${PRIVATE_KEY}\",\"path\":\"${BACKUP_DIR}\"}"
+
     echo ""
-    qrencode -t UTF8 -m 2 "$QR_JSON"
+    echo "================================"
+    echo "  Server Configuration"
+    echo "================================"
+    echo "  Host:     ${SERVER_IP}"
+    echo "  Port:     ${SSH_PORT}"
+    echo "  User:     ${BACKUP_USER}"
+    echo "  Auth:     SSH Key"
+    echo "  Path:     ${BACKUP_DIR}"
+    echo "================================"
+    echo ""
+    echo "After scanning, you can delete the private key: rm ${KEY_PATH}"
+    echo ""
+
+    if command -v qrencode &>/dev/null; then
+        echo "Scan this QR code with the Gniza Backup app:"
+        echo ""
+        qrencode -t UTF8 -m 2 "$QR_JSON"
+    fi
 fi
 
 echo ""

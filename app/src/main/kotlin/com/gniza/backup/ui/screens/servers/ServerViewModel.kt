@@ -149,8 +149,8 @@ class ServerViewModel @Inject constructor(
                     privateKeyPath = sshKeyManager.getPrivateKeyPath(keyName)
                 }
 
-                if (obj.has("croc")) {
-                    privateKeyPath = receiveCrocKey(obj.getString("croc"))
+                if (obj.has("wormhole")) {
+                    privateKeyPath = receiveWormholeKey(obj.getString("wormhole"))
                 }
 
                 val server = Server(
@@ -182,8 +182,8 @@ class ServerViewModel @Inject constructor(
                     privateKeyPath = sshKeyManager.getPrivateKeyPath(keyName)
                 }
 
-                if (obj.has("croc")) {
-                    privateKeyPath = receiveCrocKey(obj.getString("croc"))
+                if (obj.has("wormhole")) {
+                    privateKeyPath = receiveWormholeKey(obj.getString("wormhole"))
                 }
 
                 // Refresh key list so the dropdown shows the imported key
@@ -225,57 +225,56 @@ class ServerViewModel @Inject constructor(
         }
     }
 
-    private suspend fun receiveCrocKey(crocCode: String): String? {
+    private suspend fun receiveWormholeKey(wormholeCode: String): String? {
         val nativeLibDir = context.applicationInfo.nativeLibraryDir
-        val crocBinary = File(nativeLibDir, Constants.BUNDLED_CROC_LIB)
-        if (!crocBinary.exists() || !crocBinary.canExecute()) {
-            timber.log.Timber.e("Croc binary not found or not executable: ${crocBinary.absolutePath}")
+        val wormholeBinary = File(nativeLibDir, Constants.BUNDLED_WORMHOLE_LIB)
+        if (!wormholeBinary.exists() || !wormholeBinary.canExecute()) {
+            timber.log.Timber.e("Wormhole binary not found or not executable: ${wormholeBinary.absolutePath}")
             return null
         }
 
         return withContext(Dispatchers.IO) {
-            val receiveDir = File(context.filesDir, "croc_receive")
+            val receiveDir = File(context.filesDir, "wormhole_receive")
             receiveDir.listFiles()?.forEach { it.delete() }
             receiveDir.mkdirs()
 
-            timber.log.Timber.d("Croc receive: code=$crocCode, out=${receiveDir.absolutePath}")
+            timber.log.Timber.d("Wormhole receive: code=$wormholeCode, out=${receiveDir.absolutePath}")
 
             val pb = ProcessBuilder(
-                crocBinary.absolutePath, "--yes", "--overwrite", "--out", receiveDir.absolutePath
+                wormholeBinary.absolutePath, "recv", "--hide-progress", "-o", receiveDir.absolutePath, wormholeCode
             )
             pb.environment()["HOME"] = context.filesDir.absolutePath
-            pb.environment()["CROC_SECRET"] = crocCode
             pb.redirectErrorStream(true)
             pb.directory(receiveDir)
             val process = pb.start()
 
             // Read process output for debugging
             val output = process.inputStream.bufferedReader().readText()
-            timber.log.Timber.d("Croc output: $output")
+            timber.log.Timber.d("Wormhole output: $output")
 
             val finished = process.waitFor(60, TimeUnit.SECONDS)
             if (!finished) {
-                timber.log.Timber.e("Croc timed out")
+                timber.log.Timber.e("Wormhole timed out")
                 process.destroyForcibly()
             }
 
             val exitCode = try { process.exitValue() } catch (_: Exception) { -1 }
-            timber.log.Timber.d("Croc exit code: $exitCode")
+            timber.log.Timber.d("Wormhole exit code: $exitCode")
 
             val files = receiveDir.listFiles()
-            timber.log.Timber.d("Croc received files: ${files?.map { "${it.name} (${it.length()})" }}")
+            timber.log.Timber.d("Wormhole received files: ${files?.map { "${it.name} (${it.length()})" }}")
 
             val receivedFile = files?.firstOrNull { it.isFile && it.length() > 0 }
             if (receivedFile != null) {
                 val keyBytes = receivedFile.readBytes()
-                val keyName = "croc_${System.currentTimeMillis()}"
+                val keyName = "wh_${System.currentTimeMillis()}"
                 timber.log.Timber.d("Importing key: $keyName (${keyBytes.size} bytes)")
                 sshKeyManager.importKey(keyName, keyBytes)
                 val path = sshKeyManager.getPrivateKeyPath(keyName)
                 receivedFile.delete()
                 path
             } else {
-                timber.log.Timber.e("No file received via croc")
+                timber.log.Timber.e("No file received via wormhole")
                 null
             }
         }

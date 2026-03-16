@@ -17,5 +17,5 @@ object Constants {
     const val BUNDLED_SSH_LIB = "libssh.so"
     const val BUNDLED_SSH_BIN = "bin/ssh"
 
-    const val BUNDLED_CROC_LIB = "libcroc.so"
+    const val BUNDLED_WORMHOLE_LIB = "libwormhole.so"
 }
