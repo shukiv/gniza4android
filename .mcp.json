@@ -1,0 +1,13 @@
+{
+    "$schema": "https://raw.githubusercontent.com/anthropics/claude-code/main/schemas/mcp.schema.json",
+    "mcpServers": {
+        "replicant": {
+            "command": "npx",
+            "args": ["-y", "replicant-mcp"],
+            "env": {
+                "ANDROID_HOME": "/usr/lib/android-sdk"
+            },
+            "description": "Android dev MCP: build, test, emulator, UI automation, logcat"
+        }
+    }
+}
