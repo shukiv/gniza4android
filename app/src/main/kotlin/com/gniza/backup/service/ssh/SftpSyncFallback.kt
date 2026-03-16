@@ -9,7 +9,7 @@ import com.jcraft.jsch.SftpATTRS
 import com.jcraft.jsch.SftpException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import android.util.Log
+import timber.log.Timber
 import java.io.File
 import java.io.FileInputStream
 import java.util.Properties
@@ -67,10 +67,10 @@ class SftpSyncFallback @Inject constructor() {
             ensureRemoteDir(channel, destinationPath)
 
             for (sourceFolder in sourceFolders) {
-                Log.d("GnizaSFTP", "Checking source: $sourceFolder")
+                Timber.d("Checking source: $sourceFolder")
                 onProgress("Checking source: $sourceFolder")
                 val localDir = File(sourceFolder)
-                Log.d("GnizaSFTP", "exists=${localDir.exists()} isDir=${localDir.isDirectory} canRead=${localDir.canRead()} path=${localDir.absolutePath}")
+                Timber.d("exists=${localDir.exists()} isDir=${localDir.isDirectory} canRead=${localDir.canRead()} path=${localDir.absolutePath}")
                 onProgress("exists=${localDir.exists()} isDir=${localDir.isDirectory} canRead=${localDir.canRead()}")
 
                 if (!localDir.exists() || !localDir.isDirectory) {
@@ -79,10 +79,10 @@ class SftpSyncFallback @Inject constructor() {
                 }
 
                 val files = localDir.listFiles()
-                Log.d("GnizaSFTP", "Files found: ${files?.size ?: "null (no permission)"} in $sourceFolder")
+                Timber.d("Files found: ${files?.size ?: "null (no permission)"} in $sourceFolder")
                 if (files != null && files.size <= 20) {
                     val fileList = files.map { "${it.name} (${if (it.isDirectory) "dir" else "${it.length()}b"})" }
-                    Log.d("GnizaSFTP", "File list: $fileList")
+                    Timber.d("File list: $fileList")
                 }
                 onProgress("Files found: ${files?.size ?: "null (no permission)"}")
 
@@ -103,7 +103,7 @@ class SftpSyncFallback @Inject constructor() {
                 errorMessage = null
             )
         } catch (e: Exception) {
-            Log.e("GnizaSFTP", "Exception: ${e.javaClass.simpleName}: ${e.message}", e)
+            Timber.e("Exception: ${e.javaClass.simpleName}: ${e.message}", e)
             SyncResult(
                 success = false,
                 filesTransferred = filesTransferred,

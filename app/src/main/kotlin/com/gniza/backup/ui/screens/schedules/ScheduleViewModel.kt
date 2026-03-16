@@ -41,7 +41,8 @@ class ScheduleViewModel @Inject constructor(
     private val backupSourceRepository: BackupSourceRepository,
     private val serverRepository: ServerRepository,
     private val backupScheduler: BackupScheduler,
-    private val backupLogRepository: BackupLogRepository
+    private val backupLogRepository: BackupLogRepository,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
 ) : ViewModel() {
 
     val schedulesWithContext: StateFlow<UiState<List<ScheduleWithContext>>> =
@@ -83,7 +84,10 @@ class ScheduleViewModel @Inject constructor(
 
     fun loadSchedule(id: Long) {
         if (id == 0L) {
-            _editSchedule.value = Schedule()
+            // Pre-fill destination path from QR setup if available
+            val pathFile = java.io.File(context.filesDir, "qr_destination_path")
+            val qrPath = if (pathFile.exists()) pathFile.readText().trim() else ""
+            _editSchedule.value = Schedule(destinationPath = qrPath)
             return
         }
         viewModelScope.launch {

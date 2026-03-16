@@ -28,6 +28,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
+import timber.log.Timber
 
 @HiltViewModel
 class ServerViewModel @Inject constructor(
@@ -63,6 +64,16 @@ class ServerViewModel @Inject constructor(
 
     init {
         loadAvailableKeys()
+        loadQrDestinationPath()
+    }
+
+    private fun loadQrDestinationPath() {
+        viewModelScope.launch {
+            val pathFile = java.io.File(context.filesDir, "qr_destination_path")
+            if (pathFile.exists()) {
+                _qrDestinationPath.value = pathFile.readText().trim()
+            }
+        }
     }
 
     fun loadServer(id: Long) {
@@ -229,7 +240,7 @@ class ServerViewModel @Inject constructor(
         val nativeLibDir = context.applicationInfo.nativeLibraryDir
         val wormholeBinary = File(nativeLibDir, Constants.BUNDLED_WORMHOLE_LIB)
         if (!wormholeBinary.exists() || !wormholeBinary.canExecute()) {
-            timber.log.Timber.e("Wormhole binary not found or not executable: ${wormholeBinary.absolutePath}")
+            Timber.e("Wormhole binary not found or not executable: ${wormholeBinary.absolutePath}")
             return null
         }
 
@@ -238,7 +249,7 @@ class ServerViewModel @Inject constructor(
             receiveDir.listFiles()?.forEach { it.delete() }
             receiveDir.mkdirs()
 
-            timber.log.Timber.d("Wormhole receive: code=$wormholeCode, out=${receiveDir.absolutePath}")
+            Timber.d("Wormhole receive: code=$wormholeCode, out=${receiveDir.absolutePath}")
 
             val pb = ProcessBuilder(
                 wormholeBinary.absolutePath, "recv", "--hide-progress", wormholeCode
@@ -254,31 +265,31 @@ class ServerViewModel @Inject constructor(
 
             // Read process output for debugging
             val output = process.inputStream.bufferedReader().readText()
-            timber.log.Timber.d("Wormhole output: $output")
+            Timber.d("Wormhole output: $output")
 
             val finished = process.waitFor(60, TimeUnit.SECONDS)
             if (!finished) {
-                timber.log.Timber.e("Wormhole timed out")
+                Timber.e("Wormhole timed out")
                 process.destroyForcibly()
             }
 
             val exitCode = try { process.exitValue() } catch (_: Exception) { -1 }
-            timber.log.Timber.d("Wormhole exit code: $exitCode")
+            Timber.d("Wormhole exit code: $exitCode")
 
             val files = receiveDir.listFiles()
-            timber.log.Timber.d("Wormhole received files: ${files?.map { "${it.name} (${it.length()})" }}")
+            Timber.d("Wormhole received files: ${files?.map { "${it.name} (${it.length()})" }}")
 
             val receivedFile = files?.firstOrNull { it.isFile && it.length() > 0 }
             if (receivedFile != null) {
                 val keyBytes = receivedFile.readBytes()
                 val keyName = "wh_${System.currentTimeMillis()}"
-                timber.log.Timber.d("Importing key: $keyName (${keyBytes.size} bytes)")
+                Timber.d("Importing key: $keyName (${keyBytes.size} bytes)")
                 sshKeyManager.importKey(keyName, keyBytes)
                 val path = sshKeyManager.getPrivateKeyPath(keyName)
                 receivedFile.delete()
                 path
             } else {
-                timber.log.Timber.e("No file received via wormhole")
+                Timber.e("No file received via wormhole")
                 null
             }
         }

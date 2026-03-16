@@ -22,7 +22,11 @@ class GnizaApplication : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
         if (BuildConfig.DEBUG) {
-            Timber.plant(Timber.DebugTree())
+            Timber.plant(object : Timber.DebugTree() {
+                override fun createStackElementTag(element: StackTraceElement): String {
+                    return "GNIZA/${super.createStackElementTag(element)}"
+                }
+            })
         }
         // Register EdDSA provider for ed25519 SSH key support in JSch
         java.security.Security.addProvider(net.i2p.crypto.eddsa.EdDSASecurityProvider())
