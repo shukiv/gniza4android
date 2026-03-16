@@ -10,6 +10,7 @@ data class Schedule(
     val enabled: Boolean = true,
     val wifiOnly: Boolean = true,
     val whileCharging: Boolean = false,
+    val snapshotRetention: Int = 0,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

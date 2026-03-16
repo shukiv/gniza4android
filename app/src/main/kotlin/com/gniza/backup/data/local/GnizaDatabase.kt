@@ -21,7 +21,7 @@ import com.gniza.backup.data.local.entity.ServerEntity
         BackupLogEntity::class,
         ScheduleEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -35,6 +35,13 @@ abstract class GnizaDatabase : RoomDatabase() {
         val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE servers ADD COLUMN serverType TEXT NOT NULL DEFAULT 'SSH'")
+            }
+        }
+
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE schedules ADD COLUMN snapshotRetention INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE backup_logs ADD COLUMN snapshotName TEXT")
             }
         }
     }

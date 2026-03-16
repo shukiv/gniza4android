@@ -7,7 +7,8 @@ data class RsyncCommand(
     val sshCommand: String,
     val includePatterns: List<String> = emptyList(),
     val excludePatterns: List<String> = emptyList(),
-    val extraFlags: List<String> = listOf("-avz", "--progress", "--partial")
+    val extraFlags: List<String> = listOf("-avz", "--progress", "--partial"),
+    val linkDest: String? = null
 ) {
 
     fun toCommandList(): List<String> = buildList {
@@ -15,6 +16,9 @@ data class RsyncCommand(
         addAll(extraFlags)
         add("-e")
         add(sshCommand)
+        if (linkDest != null) {
+            add("--link-dest=$linkDest")
+        }
 
         for (pattern in includePatterns) {
             add("--include=$pattern")

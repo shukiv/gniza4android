@@ -165,6 +165,9 @@ private fun LogDetailContent(
                 log.totalFiles?.let {
                     DetailRow("Total files", it.toString())
                 }
+                log.snapshotName?.let {
+                    DetailRow("Snapshot", it)
+                }
             }
         }
 

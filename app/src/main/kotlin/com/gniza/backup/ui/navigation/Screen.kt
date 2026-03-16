@@ -27,4 +27,6 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     object SetupWizard : Screen("setup", "Setup", Icons.Default.PlayArrow)
     object QrScanner : Screen("qrscanner", "Scan QR", Icons.Default.CameraAlt)
     object Help : Screen("help", "Help", Icons.AutoMirrored.Filled.HelpOutline)
+    object RestoreSnapshotList : Screen("restore/{scheduleId}", "Snapshots", Icons.Default.History)
+    object RestoreSnapshotBrowse : Screen("restore/{scheduleId}/{snapshotName}", "Browse", Icons.Default.History)
 }

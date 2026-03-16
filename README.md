@@ -5,6 +5,8 @@ Android backup solution that automatically backs up folders from your device to 
 ## Features
 
 - **Bundled rsync + SSH binaries** — ships with rsync and Dropbear dbclient for arm64-v8a, armeabi-v7a, and x86_64
+- **Incremental snapshot backups** — rsync with hardlinked snapshots for space-efficient versioned backups (like Time Machine)
+- **Snapshot restore** — browse and restore files from any snapshot directly from the app
 - **Scheduled backups** — hourly, daily, or weekly via WorkManager with Wi-Fi-only and charging constraints
 - **Nextcloud support** — back up to Nextcloud via WebDAV with incremental sync (size-based comparison)
 - **SFTP fallback** — automatic fallback when rsync is unavailable on the SSH server
@@ -61,7 +63,7 @@ On first launch, the setup wizard guides you through:
 
 Gniza supports two backup destination types:
 
-- **SSH servers** — uses rsync over SSH for efficient incremental transfers (with SFTP as a fallback)
+- **SSH servers** — uses rsync over SSH for efficient incremental transfers (with SFTP as a fallback). When snapshot retention is enabled, each backup creates a dated snapshot with hardlinks to unchanged files, providing versioned backups with minimal disk usage
 - **Nextcloud** — uses WebDAV to upload files, skipping those whose size already matches on the server
 
 ```
@@ -86,6 +88,26 @@ Android Device                    Nextcloud
 └──────────────┘                 └──────────────┘
 ```
 
+### Snapshot Backups (SSH)
+
+When snapshot retention is set to a value greater than 0, Gniza creates dated snapshots with hardlinks:
+
+```
+/backup/device/
+  snapshots/
+    2025-03-14T100000/     # Older snapshot
+    2025-03-15T100000/     # Previous snapshot (hardlinked unchanged files)
+    2025-03-16T143022/     # Latest snapshot
+  latest -> snapshots/2025-03-16T143022
+```
+
+- **Space efficient** — unchanged files are hardlinked across snapshots, using no extra disk space
+- **Crash safe** — transfers go to a `.partial` directory first, renamed atomically on completion
+- **Configurable retention** — set how many snapshots to keep (oldest are pruned automatically)
+- **Restore** — browse any snapshot and restore individual files or entire snapshots to your device
+
+When snapshot retention is 0 (the default for existing schedules), backups use the legacy flat rsync mode.
+
 **Binary detection order:**
 
 | Binary | Search order |
@@ -108,10 +130,11 @@ com.gniza.backup
 ├── di                 # Hilt modules
 ├── domain/model       # Domain models (Server, BackupSource, Schedule, BackupLog)
 ├── service
-│   ├── backup         # BackupExecutor, notifications
+│   ├── backup         # BackupExecutor, SnapshotManager, notifications
 │   ├── nextcloud      # NextcloudSync, NextcloudConnectionTest (WebDAV)
+│   ├── restore        # RestoreService (snapshot browsing + restore)
 │   ├── rsync          # RsyncBinaryResolver, RsyncCommand, RsyncEngine
-│   ├── ssh            # SshKeyManager, SshBinaryResolver, SftpSyncFallback
+│   ├── ssh            # SshKeyManager, SshBinaryResolver, SshCommandExecutor, SftpSyncFallback
 │   └── worker         # BackupWorker, BackupScheduler (WorkManager)
 ├── ui
 │   ├── components     # Shared composables (TopAppBar, dialogs, badges)
@@ -120,6 +143,7 @@ com.gniza.backup
 │   │   ├── servers        # Server CRUD
 │   │   ├── sources        # Source CRUD
 │   │   ├── schedules      # Schedule management + backup execution
+│   │   ├── restore        # Snapshot browsing + file restore
 │   │   ├── logs           # Backup log history
 │   │   ├── settings       # App settings, binary status
 │   │   ├── sshkeys        # SSH key management
@@ -247,4 +271,4 @@ curl -sL https://matt.ucc.asn.au/dropbear/releases/dropbear-2024.86.tar.bz2 | ta
 
 ## License
 
-Copyright 2024 Gniza Contributors. Licensed under the Apache License 2.0.
+Copyright 2024 Gniza Contributors. Licensed under the GNU General Public License v3.0 (GPL-3.0).

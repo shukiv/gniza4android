@@ -22,7 +22,8 @@ data class BackupLogEntity(
     val totalFiles: Int?,
     val rsyncOutput: String?,
     val errorMessage: String?,
-    val durationSeconds: Int?
+    val durationSeconds: Int?,
+    val snapshotName: String?
 ) {
     fun toBackupLog(): BackupLog = BackupLog(
         id = id,
@@ -39,7 +40,8 @@ data class BackupLogEntity(
         totalFiles = totalFiles,
         rsyncOutput = rsyncOutput,
         errorMessage = errorMessage,
-        durationSeconds = durationSeconds
+        durationSeconds = durationSeconds,
+        snapshotName = snapshotName
     )
 
     companion object {
@@ -58,7 +60,8 @@ data class BackupLogEntity(
             totalFiles = log.totalFiles,
             rsyncOutput = log.rsyncOutput,
             errorMessage = log.errorMessage,
-            durationSeconds = log.durationSeconds
+            durationSeconds = log.durationSeconds,
+            snapshotName = log.snapshotName
         )
     }
 }

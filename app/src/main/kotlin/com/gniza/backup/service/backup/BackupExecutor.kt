@@ -17,7 +17,9 @@ import com.gniza.backup.service.rsync.RsyncOutput
 import com.gniza.backup.service.ssh.SftpSyncFallback
 import com.gniza.backup.service.ssh.DropbearKeyConverter
 import com.gniza.backup.service.ssh.SshBinaryResolver
+import com.gniza.backup.service.ssh.SshCommandExecutor
 import com.gniza.backup.util.Constants
+import timber.log.Timber
 import javax.inject.Inject
 
 class BackupExecutor @Inject constructor(
@@ -29,7 +31,9 @@ class BackupExecutor @Inject constructor(
     private val dropbearKeyConverter: DropbearKeyConverter,
     private val backupLogRepository: BackupLogRepository,
     private val serverRepository: ServerRepository,
-    private val backupSourceRepository: BackupSourceRepository
+    private val backupSourceRepository: BackupSourceRepository,
+    private val snapshotManager: SnapshotManager,
+    private val sshCommandExecutor: SshCommandExecutor
 ) {
 
     data class BackupResult(
@@ -38,7 +42,8 @@ class BackupExecutor @Inject constructor(
         val bytesTransferred: Long,
         val durationSeconds: Int,
         val output: String,
-        val errorMessage: String?
+        val errorMessage: String?,
+        val snapshotName: String? = null
     )
 
     suspend fun execute(
@@ -106,7 +111,8 @@ class BackupExecutor @Inject constructor(
                 bytesTransferred = result.bytesTransferred,
                 durationSeconds = durationSeconds,
                 output = result.output,
-                errorMessage = result.errorMessage
+                errorMessage = result.errorMessage,
+                snapshotName = result.snapshotName
             )
 
             // Update log entry
@@ -125,7 +131,8 @@ class BackupExecutor @Inject constructor(
                     bytesTransferred = result.bytesTransferred,
                     rsyncOutput = result.output,
                     errorMessage = result.errorMessage,
-                    durationSeconds = durationSeconds
+                    durationSeconds = durationSeconds,
+                    snapshotName = result.snapshotName
                 )
             )
 
@@ -175,6 +182,25 @@ class BackupExecutor @Inject constructor(
         validatePath(schedule.destinationPath, "destinationPath")
 
         val sshCommand = buildSshCommand(server, sshPath, isDropbear)
+        val useSnapshots = schedule.snapshotRetention > 0
+
+        if (!useSnapshots) {
+            // Legacy flat backup (no snapshots)
+            return executeRsyncFlat(rsyncPath, sshCommand, source, schedule, server, onProgress)
+        }
+
+        // Snapshot-based backup
+        return executeRsyncSnapshot(rsyncPath, sshCommand, source, schedule, server, onProgress)
+    }
+
+    private suspend fun executeRsyncFlat(
+        rsyncPath: String,
+        sshCommand: String,
+        source: BackupSource,
+        schedule: Schedule,
+        server: com.gniza.backup.domain.model.Server,
+        onProgress: (RsyncOutput) -> Unit
+    ): InternalResult {
         val remoteDestination = "${server.username}@${server.host}:${schedule.destinationPath}"
 
         val command = RsyncCommand(
@@ -187,6 +213,111 @@ class BackupExecutor @Inject constructor(
             extraFlags = Constants.RSYNC_DEFAULT_FLAGS
         )
 
+        return collectRsyncOutput(command, onProgress)
+    }
+
+    private suspend fun executeRsyncSnapshot(
+        rsyncPath: String,
+        sshCommand: String,
+        source: BackupSource,
+        schedule: Schedule,
+        server: com.gniza.backup.domain.model.Server,
+        onProgress: (RsyncOutput) -> Unit
+    ): InternalResult {
+        val session = sshCommandExecutor.openSession(server)
+        val basePath = schedule.destinationPath
+        val snapshotName = snapshotManager.generateSnapshotName()
+
+        try {
+            // 1. Ensure snapshots directory exists
+            snapshotManager.ensureSnapshotsDir(session, basePath)
+
+            // 2. Clean up any stale partial transfers
+            snapshotManager.cleanStalePartials(session, basePath)
+
+            // 3. Get the latest completed snapshot for --link-dest
+            val latestSnapshot = snapshotManager.getLatestSnapshot(session, basePath)
+            Timber.d("Latest snapshot: $latestSnapshot")
+
+            // 4. Create partial directory for this snapshot
+            snapshotManager.createPartialDir(session, basePath, snapshotName)
+
+            // 5. Run rsync for each source folder into the partial snapshot dir
+            val partialDir = "${Constants.SNAPSHOT_DIR_NAME}/${snapshotName}${Constants.SNAPSHOT_PARTIAL_SUFFIX}"
+            val outputLines = StringBuilder()
+            var totalFilesTransferred = 0
+            var totalBytesTransferred = 0L
+            var errorMessage: String? = null
+            var success = true
+
+            for (sourceFolder in source.sourceFolders) {
+                val folderBaseName = sourceFolder.trimEnd('/').substringAfterLast('/')
+                val remoteDestination = "${server.username}@${server.host}:${basePath}/${partialDir}/${folderBaseName}/"
+
+                // --link-dest is relative to the destination
+                // From snapshots/<new>.partial/<folder>/ to snapshots/<prev>/<folder>/
+                val linkDest = if (latestSnapshot != null) {
+                    // latestSnapshot is like "snapshots/2025-03-15T120000" (relative to basePath)
+                    "../../${latestSnapshot}/${folderBaseName}/"
+                } else {
+                    null
+                }
+
+                val command = RsyncCommand(
+                    rsyncPath = rsyncPath,
+                    sourcePaths = listOf(sourceFolder),
+                    destination = remoteDestination,
+                    sshCommand = sshCommand,
+                    includePatterns = source.includePatterns,
+                    excludePatterns = source.excludePatterns,
+                    extraFlags = Constants.RSYNC_SNAPSHOT_FLAGS,
+                    linkDest = linkDest
+                )
+
+                val result = collectRsyncOutput(command, onProgress)
+                outputLines.appendLine(result.output)
+                totalFilesTransferred += result.filesTransferred
+                totalBytesTransferred += result.bytesTransferred
+
+                if (!result.success) {
+                    errorMessage = result.errorMessage
+                    success = false
+                    break
+                }
+            }
+
+            if (success) {
+                // 6. Finalize: rename .partial to final, update latest symlink
+                snapshotManager.finalizeSnapshot(session, basePath, snapshotName)
+
+                // 7. Enforce retention
+                if (schedule.snapshotRetention > 0) {
+                    try {
+                        snapshotManager.enforceRetention(session, basePath, schedule.snapshotRetention)
+                    } catch (e: Exception) {
+                        Timber.w(e, "Snapshot retention enforcement failed (non-fatal)")
+                        outputLines.appendLine("Warning: retention cleanup failed: ${e.message}")
+                    }
+                }
+            }
+
+            return InternalResult(
+                success = success,
+                filesTransferred = totalFilesTransferred,
+                bytesTransferred = totalBytesTransferred,
+                output = outputLines.toString(),
+                errorMessage = errorMessage,
+                snapshotName = if (success) snapshotName else null
+            )
+        } finally {
+            session.disconnect()
+        }
+    }
+
+    private suspend fun collectRsyncOutput(
+        command: RsyncCommand,
+        onProgress: (RsyncOutput) -> Unit
+    ): InternalResult {
         val outputLines = StringBuilder()
         var filesTransferred = 0
         var bytesTransferred = 0L
@@ -207,9 +338,7 @@ class BackupExecutor @Inject constructor(
                 is RsyncOutput.Log -> {
                     outputLines.appendLine(output.line)
                 }
-                is RsyncOutput.Progress -> {
-                    // Progress is reported via onProgress callback
-                }
+                is RsyncOutput.Progress -> {}
                 is RsyncOutput.FileComplete -> {
                     outputLines.appendLine("Completed: ${output.fileName} (${output.size} bytes)")
                 }
@@ -317,6 +446,7 @@ class BackupExecutor @Inject constructor(
 
     private fun validatePath(path: String, fieldName: String) {
         require(path.isNotEmpty()) { "$fieldName must not be empty" }
+        require(!path.contains("..")) { "$fieldName must not contain '..' segments" }
         require(SAFE_PATH_REGEX.matches(path)) {
             "$fieldName contains invalid characters"
         }
@@ -360,6 +490,7 @@ class BackupExecutor @Inject constructor(
         val filesTransferred: Int,
         val bytesTransferred: Long,
         val output: String,
-        val errorMessage: String?
+        val errorMessage: String?,
+        val snapshotName: String? = null
     )
 }

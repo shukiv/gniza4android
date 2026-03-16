@@ -244,6 +244,24 @@ fun ScheduleEditScreen(
                 Text("While charging")
             }
 
+            // Snapshots section
+            HorizontalDivider()
+            Text(
+                text = "Snapshots",
+                style = MaterialTheme.typography.titleSmall
+            )
+            OutlinedTextField(
+                value = if (schedule.snapshotRetention > 0) schedule.snapshotRetention.toString() else "0",
+                onValueChange = { value ->
+                    val retention = value.filter { it.isDigit() }.toIntOrNull() ?: 0
+                    viewModel.updateEditSchedule(schedule.copy(snapshotRetention = retention))
+                },
+                label = { Text("Snapshot Retention") },
+                supportingText = { Text("Number of snapshots to keep (0 = flat backup, no snapshots)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
             // Enabled toggle
             HorizontalDivider()
             Row(

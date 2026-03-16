@@ -20,6 +20,8 @@ import com.gniza.backup.ui.screens.servers.ServerListScreen
 import com.gniza.backup.ui.screens.qrscanner.QrScannerScreen
 import com.gniza.backup.ui.screens.settings.SettingsScreen
 import com.gniza.backup.ui.screens.sshkeys.SshKeyScreen
+import com.gniza.backup.ui.screens.restore.RestoreSnapshotBrowseScreen
+import com.gniza.backup.ui.screens.restore.RestoreSnapshotListScreen
 import com.gniza.backup.ui.screens.wizard.SetupWizardScreen
 
 @Composable
@@ -135,6 +137,27 @@ fun GnizaNavHost(
         composable(Screen.Help.route) {
             HelpScreen(
                 onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            route = Screen.RestoreSnapshotList.route,
+            arguments = listOf(navArgument("scheduleId") { type = NavType.LongType })
+        ) {
+            RestoreSnapshotListScreen(navController = navController)
+        }
+
+        composable(
+            route = Screen.RestoreSnapshotBrowse.route,
+            arguments = listOf(
+                navArgument("scheduleId") { type = NavType.LongType },
+                navArgument("snapshotName") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val snapshotName = backStackEntry.arguments?.getString("snapshotName") ?: ""
+            RestoreSnapshotBrowseScreen(
+                navController = navController,
+                snapshotName = snapshotName
             )
         }
     }

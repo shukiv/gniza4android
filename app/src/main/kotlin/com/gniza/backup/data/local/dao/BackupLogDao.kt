@@ -30,4 +30,7 @@ interface BackupLogDao {
 
     @Query("DELETE FROM backup_logs WHERE startedAt < :timestamp")
     suspend fun deleteOlderThan(timestamp: Long)
+
+    @Query("UPDATE backup_logs SET status = 'FAILED', errorMessage = 'Backup interrupted (app was killed)' WHERE status = 'RUNNING'")
+    suspend fun markStaleRunningAsFailed()
 }

@@ -24,7 +24,7 @@ object DatabaseModule {
             context,
             GnizaDatabase::class.java,
             "gniza.db"
-        ).addMigrations(GnizaDatabase.MIGRATION_4_5)
+        ).addMigrations(GnizaDatabase.MIGRATION_4_5, GnizaDatabase.MIGRATION_5_6)
             .fallbackToDestructiveMigration().build()
     }
 

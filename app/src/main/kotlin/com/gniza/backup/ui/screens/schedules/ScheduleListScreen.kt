@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Button
 import androidx.compose.material3.ElevatedCard
@@ -148,7 +149,15 @@ fun ScheduleListScreen(
                                     )
                                 },
                                 onDelete = { scheduleToDelete = item },
-                                onRunNow = { viewModel.runNow(item.schedule.id) }
+                                onRunNow = { viewModel.runNow(item.schedule.id) },
+                                onRestore = {
+                                    navController.navigate(
+                                        Screen.RestoreSnapshotList.route.replace(
+                                            "{scheduleId}",
+                                            item.schedule.id.toString()
+                                        )
+                                    )
+                                }
                             )
                         }
                         item { Spacer(modifier = Modifier.height(80.dp)) }
@@ -178,7 +187,8 @@ private fun ScheduleCard(
     scheduleWithContext: ScheduleWithContext,
     onTap: () -> Unit,
     onDelete: () -> Unit,
-    onRunNow: () -> Unit
+    onRunNow: () -> Unit,
+    onRestore: () -> Unit
 ) {
     val schedule = scheduleWithContext.schedule
     val lastLog = scheduleWithContext.lastLog
@@ -239,6 +249,15 @@ private fun ScheduleCard(
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.weight(1f)
                     )
+                    if (schedule.snapshotRetention > 0) {
+                        IconButton(onClick = onRestore) {
+                            Icon(
+                                imageVector = Icons.Default.Restore,
+                                contentDescription = "Restore from snapshot",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                     IconButton(onClick = onDelete) {
                         Icon(
                             imageVector = Icons.Default.Delete,

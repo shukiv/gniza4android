@@ -17,6 +17,7 @@ data class ScheduleEntity(
     val enabled: Boolean,
     val wifiOnly: Boolean,
     val whileCharging: Boolean,
+    val snapshotRetention: Int,
     val createdAt: Long,
     val updatedAt: Long
 ) {
@@ -30,6 +31,7 @@ data class ScheduleEntity(
         enabled = enabled,
         wifiOnly = wifiOnly,
         whileCharging = whileCharging,
+        snapshotRetention = snapshotRetention,
         createdAt = createdAt,
         updatedAt = updatedAt
     )
@@ -45,6 +47,7 @@ data class ScheduleEntity(
             enabled = schedule.enabled,
             wifiOnly = schedule.wifiOnly,
             whileCharging = schedule.whileCharging,
+            snapshotRetention = schedule.snapshotRetention,
             createdAt = schedule.createdAt,
             updatedAt = schedule.updatedAt
         )

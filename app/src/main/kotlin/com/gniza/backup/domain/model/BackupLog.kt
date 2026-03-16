@@ -15,5 +15,6 @@ data class BackupLog(
     val totalFiles: Int? = null,
     val rsyncOutput: String? = null,
     val errorMessage: String? = null,
-    val durationSeconds: Int? = null
+    val durationSeconds: Int? = null,
+    val snapshotName: String? = null
 )

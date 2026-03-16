@@ -39,4 +39,8 @@ class BackupLogRepository @Inject constructor(
         val cutoff = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(retentionDays.toLong())
         backupLogDao.deleteOlderThan(cutoff)
     }
+
+    suspend fun markStaleRunningAsFailed() {
+        backupLogDao.markStaleRunningAsFailed()
+    }
 }

@@ -6,6 +6,7 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
+import com.gniza.backup.data.repository.BackupLogRepository
 import com.gniza.backup.data.repository.BackupSourceRepository
 import com.gniza.backup.data.repository.ScheduleRepository
 import com.gniza.backup.service.backup.BackupExecutor
@@ -22,7 +23,8 @@ class BackupWorker @AssistedInject constructor(
     private val backupExecutor: BackupExecutor,
     private val scheduleRepository: ScheduleRepository,
     private val backupSourceRepository: BackupSourceRepository,
-    private val backupNotificationManager: BackupNotificationManager
+    private val backupNotificationManager: BackupNotificationManager,
+    private val backupLogRepository: BackupLogRepository
 ) : CoroutineWorker(context, params) {
 
     companion object {
@@ -30,6 +32,8 @@ class BackupWorker @AssistedInject constructor(
     }
 
     override suspend fun doWork(): Result {
+        backupLogRepository.markStaleRunningAsFailed()
+
         val scheduleId = inputData.getLong(KEY_SCHEDULE_ID, -1)
         if (scheduleId == -1L) {
             return Result.failure()
