@@ -22,10 +22,10 @@ class MainViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            val count = serverRepository.serverCount.first()
-            _initialStartDestination.value = if (count == 0) {
-                Screen.SetupWizard.route
-            } else {
+            _initialStartDestination.value = try {
+                val count = serverRepository.serverCount.first()
+                if (count == 0) Screen.SetupWizard.route else Screen.ScheduleList.route
+            } catch (_: Exception) {
                 Screen.ScheduleList.route
             }
         }
