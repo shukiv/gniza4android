@@ -24,6 +24,8 @@ class GnizaApplication : Application(), Configuration.Provider {
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())
         }
+        // Register EdDSA provider for ed25519 SSH key support in JSch
+        java.security.Security.addProvider(net.i2p.crypto.eddsa.EdDSASecurityProvider())
         NotificationChannels.createAll(this)
     }
 }

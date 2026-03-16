@@ -28,7 +28,21 @@ class SshConnectionTest @Inject constructor() {
     suspend fun testConnection(server: Server): ConnectionTestResult = withContext(Dispatchers.IO) {
         var session: Session? = null
         try {
+            // Ensure EdDSA provider is available for ed25519 keys
+            if (java.security.Security.getProvider("EdDSA") == null) {
+                java.security.Security.insertProviderAt(net.i2p.crypto.eddsa.EdDSASecurityProvider(), 1)
+            }
+            android.util.Log.e("GNIZA_SSH", "EdDSA provider: ${java.security.Security.getProvider("EdDSA")}")
+            android.util.Log.e("GNIZA_SSH", "All providers: ${java.security.Security.getProviders().map { it.name }}")
+
             val jsch = JSch()
+            // Force JSch to recognize ed25519
+            try {
+                JSch.setConfig("ssh-ed25519", "com.jcraft.jsch.jce.SignatureEd25519")
+                JSch.setConfig("ssh-ed448", "com.jcraft.jsch.jce.SignatureEd448")
+            } catch (e: Exception) {
+                android.util.Log.e("GNIZA_SSH", "Failed to set ed25519 config: ${e.message}")
+            }
             JSch.setLogger(object : com.jcraft.jsch.Logger {
                 override fun isEnabled(level: Int) = true
                 override fun log(level: Int, message: String) {
