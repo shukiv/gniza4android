@@ -173,9 +173,8 @@ if command -v croc &>/dev/null; then
     CROC_FIFO=$(mktemp -u)
     mkfifo "$CROC_FIFO"
 
-    # Run croc send in background, capture output to get the real code
-    # Close stdin (< /dev/null) so croc reads the file, not the pipe
-    croc send "${KEY_PATH}" < /dev/null > "$CROC_FIFO" 2>&1 &
+    # Send key via stdin — croc on Android can't receive named files properly
+    cat "${KEY_PATH}" | croc send > "$CROC_FIFO" 2>&1 &
     CROC_PID=$!
 
     # Read the code from croc output
