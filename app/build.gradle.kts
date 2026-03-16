@@ -103,6 +103,7 @@ dependencies {
 
     // SSH
     implementation(libs.jsch)
+    implementation("net.i2p.crypto:eddsa:0.3.0")
 
     // Rsync binary
     implementation("com.nerdoftheherd:android-rsync:3.4.1")

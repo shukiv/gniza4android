@@ -29,8 +29,18 @@ class SshConnectionTest @Inject constructor() {
         var session: Session? = null
         try {
             val jsch = JSch()
+            JSch.setLogger(object : com.jcraft.jsch.Logger {
+                override fun isEnabled(level: Int) = true
+                override fun log(level: Int, message: String) {
+                    android.util.Log.d("GNIZA_JSCH", message)
+                }
+            })
+
+            android.util.Log.e("GNIZA_SSH", "Testing: ${server.username}@${server.host}:${server.port} auth=${server.authMethod} keyPath=${server.privateKeyPath}")
 
             if (server.authMethod == AuthMethod.SSH_KEY && server.privateKeyPath != null) {
+                val keyFile = java.io.File(server.privateKeyPath)
+                android.util.Log.e("GNIZA_SSH", "Key file: exists=${keyFile.exists()} readable=${keyFile.canRead()} size=${keyFile.length()}")
                 if (server.privateKeyPassphrase != null) {
                     jsch.addIdentity(server.privateKeyPath, server.privateKeyPassphrase)
                 } else {
@@ -68,6 +78,7 @@ class SshConnectionTest @Inject constructor() {
                 rsyncAvailable = rsyncAvailable
             )
         } catch (e: Exception) {
+            android.util.Log.e("GNIZA_SSH", "Connection failed", e)
             ConnectionTestResult(
                 success = false,
                 message = "Connection failed: ${e.message ?: "Unknown error"}"
