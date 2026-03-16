@@ -86,7 +86,7 @@ if ! $SKIP_INSTALL; then
     fi
 
     # --- Install wormhole-william ---
-    if ! command -v wormhole-william &>/dev/null; then
+    if ! command -v wormhole-william &>/dev/null && [[ ! -x "$HOME/.local/bin/wormhole-william" ]]; then
         echo "[..] Installing wormhole-william..."
         WW_ARCH=$(uname -m)
         case "$WW_ARCH" in
@@ -97,9 +97,13 @@ if ! $SKIP_INSTALL; then
         esac
         if [[ -n "$WW_ARCH" ]]; then
             WW_URL="https://github.com/psanford/wormhole-william/releases/latest/download/wormhole-william-linux-${WW_ARCH}"
-            curl -sL "$WW_URL" -o /usr/local/bin/wormhole-william 2>/dev/null && chmod +x /usr/local/bin/wormhole-william
+            mkdir -p "$HOME/.local/bin"
+            curl -sL "$WW_URL" -o "$HOME/.local/bin/wormhole-william" 2>/dev/null && chmod +x "$HOME/.local/bin/wormhole-william"
+            export PATH="$HOME/.local/bin:$PATH"
         fi
     fi
+    # Also check ~/.local/bin
+    [[ -x "$HOME/.local/bin/wormhole-william" ]] && export PATH="$HOME/.local/bin:$PATH"
 
     if command -v wormhole-william &>/dev/null; then
         echo "[OK] wormhole-william is available"
