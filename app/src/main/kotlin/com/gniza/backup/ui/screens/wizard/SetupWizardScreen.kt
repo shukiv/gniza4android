@@ -41,7 +41,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -72,17 +71,6 @@ fun SetupWizardScreen(
 ) {
     val currentStep by viewModel.currentStep.collectAsStateWithLifecycle()
     val isSaving by viewModel.isSaving.collectAsStateWithLifecycle()
-
-    val savedStateHandle = navController.currentBackStackEntry?.savedStateHandle
-    val qrResult by savedStateHandle?.getLiveData<String>("qr_result")
-        ?.observeAsState() ?: remember { mutableStateOf(null) }
-
-    LaunchedEffect(qrResult) {
-        qrResult?.let { json ->
-            viewModel.applyQrData(json)
-            savedStateHandle?.remove<String>("qr_result")
-        }
-    }
 
     Scaffold(
         topBar = {

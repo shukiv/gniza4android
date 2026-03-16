@@ -34,9 +34,7 @@ import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -63,17 +61,6 @@ fun ServerListScreen(
 ) {
     val serversState by viewModel.servers.collectAsState()
     var serverToDelete by remember { mutableStateOf<Server?>(null) }
-
-    val savedStateHandle = navController.currentBackStackEntry?.savedStateHandle
-    val qrResult by savedStateHandle?.getLiveData<String>("qr_result")
-        ?.observeAsState() ?: remember { mutableStateOf(null) }
-
-    LaunchedEffect(qrResult) {
-        qrResult?.let { json ->
-            viewModel.applyQrData(json)
-            savedStateHandle?.remove<String>("qr_result")
-        }
-    }
 
     Scaffold(
         topBar = {
