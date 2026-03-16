@@ -168,48 +168,58 @@ fi
 SERVER_HOSTNAME="$(hostname)"
 
 # --- Transfer key via croc or embed in QR ---
-CROC_CODE=""
 if command -v croc &>/dev/null; then
-    # Generate a short croc code
-    CROC_CODE=$(head -c 6 /dev/urandom | base64 | tr -dc 'a-z0-9' | head -c 8)
+    # Start croc send and capture the auto-generated code
+    CROC_FIFO=$(mktemp -u)
+    mkfifo "$CROC_FIFO"
 
-    QR_JSON="{\"gniza\":1,\"name\":\"${SERVER_HOSTNAME}\",\"host\":\"${SERVER_IP}\",\"port\":${SSH_PORT},\"user\":\"${BACKUP_USER}\",\"auth\":\"ssh_key\",\"croc\":\"${CROC_CODE}\",\"path\":\"${BACKUP_DIR}\"}"
-
-    echo ""
-    echo "================================"
-    echo "  Server Configuration"
-    echo "================================"
-    echo "  Host:     ${SERVER_IP}"
-    echo "  Port:     ${SSH_PORT}"
-    echo "  User:     ${BACKUP_USER}"
-    echo "  Auth:     SSH Key (via croc)"
-    echo "  Path:     ${BACKUP_DIR}"
-    echo "  Croc:     ${CROC_CODE}"
-    echo "================================"
-    echo ""
-
-    # Start croc send in background, then show QR
-    # Pipe via stdin — croc v10 ignores file args when CROC_SECRET is set
-    cat "${KEY_PATH}" | CROC_SECRET="${CROC_CODE}" croc send > /dev/null 2>&1 &
+    # Run croc send in background, capture output to get the real code
+    croc send "${KEY_PATH}" > "$CROC_FIFO" 2>&1 &
     CROC_PID=$!
 
-    echo "After scanning the QR code, the private key will be"
-    echo "transferred securely via croc relay."
-    echo ""
-    echo "You can delete the private key from this server afterwards:"
-    echo "  rm ${KEY_PATH}"
-    echo ""
+    # Read the code from croc output
+    CROC_CODE=""
+    while IFS= read -r line; do
+        if [[ "$line" =~ Code\ is:\ (.+) ]]; then
+            CROC_CODE="${BASH_REMATCH[1]}"
+            break
+        fi
+    done < "$CROC_FIFO"
+    rm -f "$CROC_FIFO"
 
-    if command -v qrencode &>/dev/null; then
-        echo "Scan this QR code with the Gniza Backup app:"
+    if [[ -z "$CROC_CODE" ]]; then
+        echo "[!!] Failed to get croc code. Falling back to embedded key."
+        kill $CROC_PID 2>/dev/null
+    else
+        QR_JSON="{\"gniza\":1,\"name\":\"${SERVER_HOSTNAME}\",\"host\":\"${SERVER_IP}\",\"port\":${SSH_PORT},\"user\":\"${BACKUP_USER}\",\"auth\":\"ssh_key\",\"croc\":\"${CROC_CODE}\",\"path\":\"${BACKUP_DIR}\"}"
+
         echo ""
-        qrencode -t UTF8 -m 2 "$QR_JSON"
-    fi
+        echo "================================"
+        echo "  Server Configuration"
+        echo "================================"
+        echo "  Host:     ${SERVER_IP}"
+        echo "  Port:     ${SSH_PORT}"
+        echo "  User:     ${BACKUP_USER}"
+        echo "  Auth:     SSH Key (via croc)"
+        echo "  Path:     ${BACKUP_DIR}"
+        echo "  Croc:     ${CROC_CODE}"
+        echo "================================"
+        echo ""
+        echo "You can delete the private key from this server afterwards:"
+        echo "  rm ${KEY_PATH}"
+        echo ""
 
-    echo ""
-    echo "Waiting for the Gniza app to receive the key..."
-    wait $CROC_PID 2>/dev/null
-    echo "[OK] Private key transferred."
+        if command -v qrencode &>/dev/null; then
+            echo "Scan this QR code with the Gniza Backup app:"
+            echo ""
+            qrencode -t UTF8 -m 2 "$QR_JSON"
+        fi
+
+        echo ""
+        echo "Waiting for the Gniza app to receive the key..."
+        wait $CROC_PID 2>/dev/null
+        echo "[OK] Private key transferred."
+    fi
 
 else
     # Fallback: embed compressed key in QR
