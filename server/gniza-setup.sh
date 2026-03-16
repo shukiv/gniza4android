@@ -142,7 +142,7 @@ KEY_PATH="${SSH_DIR}/${KEY_NAME}"
 
 echo ""
 echo "[..] Generating SSH key pair..."
-ssh-keygen -t ed25519 -f "${KEY_PATH}" -N "" -C "gniza-backup" -q
+ssh-keygen -t rsa -b 2048 -m PEM -f "${KEY_PATH}" -N "" -C "gniza-backup" -q
 chmod 600 "${KEY_PATH}"
 chmod 644 "${KEY_PATH}.pub"
 echo "[OK] Key pair generated: ${KEY_PATH}"
