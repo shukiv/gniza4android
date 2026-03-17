@@ -13,6 +13,9 @@ interface BackupLogDao {
     @Query("SELECT * FROM backup_logs ORDER BY startedAt DESC")
     fun getAll(): Flow<List<BackupLogEntity>>
 
+    @Query("SELECT id, sourceId, sourceName, serverName, scheduleId, scheduleName, startedAt, completedAt, status, filesTransferred, bytesTransferred, totalFiles, NULL as rsyncOutput, errorMessage, durationSeconds, snapshotName FROM backup_logs ORDER BY startedAt DESC")
+    fun getAllWithoutOutput(): Flow<List<BackupLogEntity>>
+
     @Query("SELECT * FROM backup_logs WHERE sourceId = :sourceId ORDER BY startedAt DESC")
     fun getBySourceId(sourceId: Long): Flow<List<BackupLogEntity>>
 

@@ -11,7 +11,7 @@ import javax.inject.Inject
 class BackupLogRepository @Inject constructor(
     private val backupLogDao: BackupLogDao
 ) {
-    val allLogs: Flow<List<BackupLog>> = backupLogDao.getAll().map { entities ->
+    val allLogs: Flow<List<BackupLog>> = backupLogDao.getAllWithoutOutput().map { entities ->
         entities.map { it.toBackupLog() }
     }
 
