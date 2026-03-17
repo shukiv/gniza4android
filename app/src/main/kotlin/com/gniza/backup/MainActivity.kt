@@ -1,7 +1,9 @@
 package com.gniza.backup
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -11,7 +13,9 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +28,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,13 +51,21 @@ class MainActivity : ComponentActivity() {
 
     private var hasStoragePermission by mutableStateOf(false)
     private var hasBatteryExemption by mutableStateOf(false)
+    private var hasNotificationPermission by mutableStateOf(false)
     private val mainViewModel: MainViewModel by viewModels()
+
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasNotificationPermission = granted
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         checkStoragePermission()
         checkBatteryExemption()
+        checkNotificationPermission()
         setContent {
             GnizaTheme {
                 if (!hasStoragePermission && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -78,6 +91,36 @@ class MainActivity : ComponentActivity() {
                             Spacer(modifier = Modifier.height(24.dp))
                             Button(onClick = { requestAllFilesAccess() }) {
                                 Text("Grant Permission")
+                            }
+                        }
+                    }
+                } else if (!hasNotificationPermission && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(innerPadding)
+                                .padding(32.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = "Notification Permission",
+                                style = MaterialTheme.typography.headlineSmall
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = "Gniza needs notification permission to show backup progress and alert you when backups complete or fail.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(24.dp))
+                            Button(onClick = { requestNotificationPermission() }) {
+                                Text("Allow Notifications")
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            TextButton(onClick = { hasNotificationPermission = true }) {
+                                Text("Skip")
                             }
                         }
                     }
@@ -130,8 +173,7 @@ class MainActivity : ComponentActivity() {
                                 Screen.ServerList,
                                 Screen.SourceList,
                                 Screen.ScheduleList,
-                                Screen.LogList,
-                                Screen.Settings
+                                Screen.LogList
                             )
                             val showBottomBar = bottomNavScreens.any { it.route == currentRoute }
 
@@ -172,6 +214,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         checkStoragePermission()
         checkBatteryExemption()
+        checkNotificationPermission()
     }
 
     private fun checkStoragePermission() {
@@ -207,6 +250,22 @@ class MainActivity : ComponentActivity() {
                 data = Uri.parse("package:$packageName")
             }
             startActivity(intent)
+        }
+    }
+
+    private fun checkNotificationPermission() {
+        hasNotificationPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(
+                this, Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
+    }
+
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 }

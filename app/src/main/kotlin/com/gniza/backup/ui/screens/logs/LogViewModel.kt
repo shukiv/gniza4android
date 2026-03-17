@@ -58,4 +58,10 @@ class LogViewModel @Inject constructor(
             backupLogRepository.deleteOldLogs(retentionDays)
         }
     }
+
+    fun deleteAllLogs() {
+        viewModelScope.launch {
+            backupLogRepository.deleteAllLogs()
+        }
+    }
 }

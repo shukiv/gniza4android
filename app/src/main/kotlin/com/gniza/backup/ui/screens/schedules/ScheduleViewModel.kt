@@ -133,4 +133,12 @@ class ScheduleViewModel @Inject constructor(
             _messages.emit("Backup started")
         }
     }
+
+    fun stopBackup(scheduleId: Long) {
+        viewModelScope.launch {
+            backupScheduler.cancelImmediate(scheduleId)
+            backupLogRepository.markStaleRunningAsFailed()
+            _messages.emit("Backup stopped")
+        }
+    }
 }

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.History
@@ -58,11 +59,13 @@ fun LogListScreen(
     val currentFilter by viewModel.filter.collectAsState()
     var showMenu by remember { mutableStateOf(false) }
     var showClearDialog by remember { mutableStateOf(false) }
+    var showClearAllDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             GnizaTopAppBar(
                 title = "Logs",
+                onSettingsClick = { navController.navigate("settings") },
                 actions = {
                     IconButton(onClick = { navController.navigate("help") }) {
                         Icon(
@@ -91,6 +94,19 @@ fun LogListScreen(
                             onClick = {
                                 showMenu = false
                                 showClearDialog = true
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(text = "Clear All Logs") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = null
+                                )
+                            },
+                            onClick = {
+                                showMenu = false
+                                showClearAllDialog = true
                             }
                         )
                     }
@@ -177,6 +193,19 @@ fun LogListScreen(
                 showClearDialog = false
             },
             onDismiss = { showClearDialog = false }
+        )
+    }
+
+    if (showClearAllDialog) {
+        ConfirmDialog(
+            title = "Clear All Logs",
+            message = "This will delete all backup logs. This cannot be undone.",
+            confirmText = "Clear All",
+            onConfirm = {
+                viewModel.deleteAllLogs()
+                showClearAllDialog = false
+            },
+            onDismiss = { showClearAllDialog = false }
         )
     }
 }

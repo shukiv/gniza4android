@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -29,6 +30,7 @@ fun GnizaTopAppBar(
     title: String,
     modifier: Modifier = Modifier,
     onNavigateBack: (() -> Unit)? = null,
+    onSettingsClick: (() -> Unit)? = null,
     actions: @Composable () -> Unit = {}
 ) {
     if (onNavigateBack != null) {
@@ -68,7 +70,17 @@ fun GnizaTopAppBar(
                 }
             },
             modifier = modifier,
-            actions = { actions() }
+            actions = {
+                actions()
+                if (onSettingsClick != null) {
+                    IconButton(onClick = onSettingsClick) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Settings"
+                        )
+                    }
+                }
+            }
         )
     }
 }

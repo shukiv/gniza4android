@@ -3,8 +3,10 @@ package com.gniza.backup.service.worker
 import android.content.Context
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.OutOfQuotaPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
@@ -68,9 +70,19 @@ class BackupScheduler @Inject constructor(
 
         val workRequest = OneTimeWorkRequestBuilder<BackupWorker>()
             .setInputData(inputData)
+            .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             .build()
 
-        workManager.enqueue(workRequest)
+        workManager.enqueueUniqueWork(
+            "backup_immediate_$scheduleId",
+            ExistingWorkPolicy.KEEP,
+            workRequest
+        )
+    }
+
+    fun cancelImmediate(scheduleId: Long) {
+        val workManager = WorkManager.getInstance(context)
+        workManager.cancelUniqueWork("backup_immediate_$scheduleId")
     }
 
     private fun workName(scheduleId: Long) = "backup_$scheduleId"

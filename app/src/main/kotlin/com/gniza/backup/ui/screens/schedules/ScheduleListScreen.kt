@@ -21,6 +21,8 @@ import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Stop
+import com.gniza.backup.domain.model.BackupStatus
 import androidx.compose.material3.Button
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -81,6 +83,7 @@ fun ScheduleListScreen(
         topBar = {
             GnizaTopAppBar(
                 title = "Schedules",
+                onSettingsClick = { navController.navigate("settings") },
                 actions = {
                     IconButton(onClick = { navController.navigate("help") }) {
                         Icon(
@@ -150,6 +153,7 @@ fun ScheduleListScreen(
                                 },
                                 onDelete = { scheduleToDelete = item },
                                 onRunNow = { viewModel.runNow(item.schedule.id) },
+                                onStop = { viewModel.stopBackup(item.schedule.id) },
                                 onRestore = {
                                     navController.navigate(
                                         Screen.RestoreSnapshotList.route.replace(
@@ -188,6 +192,7 @@ private fun ScheduleCard(
     onTap: () -> Unit,
     onDelete: () -> Unit,
     onRunNow: () -> Unit,
+    onStop: () -> Unit,
     onRestore: () -> Unit
 ) {
     val schedule = scheduleWithContext.schedule
@@ -265,13 +270,29 @@ private fun ScheduleCard(
                             tint = MaterialTheme.colorScheme.error
                         )
                     }
-                    Button(onClick = onRunNow) {
-                        Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = null
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = "Run Now")
+                    if (lastLog?.status == BackupStatus.RUNNING) {
+                        Button(
+                            onClick = onStop,
+                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Stop,
+                                contentDescription = null
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(text = "Stop")
+                        }
+                    } else {
+                        Button(onClick = onRunNow) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = null
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(text = "Run Now")
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(4.dp))

@@ -64,6 +64,7 @@ fun SourceListScreen(
         topBar = {
             GnizaTopAppBar(
                 title = "Sources",
+                onSettingsClick = { navController.navigate("settings") },
                 actions = {
                     IconButton(onClick = { navController.navigate("help") }) {
                         Icon(

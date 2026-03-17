@@ -1,5 +1,9 @@
 package com.gniza.backup.service.rsync
 
+import android.content.Context
+import android.net.wifi.WifiManager
+import android.os.PowerManager
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -7,13 +11,15 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import timber.log.Timber
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import javax.inject.Inject
 import kotlin.coroutines.coroutineContext
 
 class RsyncEngine @Inject constructor(
-    private val rsyncBinaryResolver: RsyncBinaryResolver
+    private val rsyncBinaryResolver: RsyncBinaryResolver,
+    @ApplicationContext private val context: Context
 ) {
 
     private val processMutex = Mutex()
@@ -49,6 +55,22 @@ class RsyncEngine @Inject constructor(
     suspend fun execute(command: RsyncCommand): Flow<RsyncOutput> = flow {
         processMutex.withLock {
             val commandList = command.toCommandList()
+
+            // Acquire wakelocks to prevent the CPU and WiFi from sleeping during transfer
+            val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+            val wakeLock = powerManager.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "gniza:rsync_transfer"
+            )
+            val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+            val wifiLock = wifiManager.createWifiLock(
+                WifiManager.WIFI_MODE_FULL_HIGH_PERF,
+                "gniza:rsync_transfer"
+            )
+
+            wakeLock.acquire(60 * 60 * 1000L) // 60 min timeout safety
+            wifiLock.acquire()
+            Timber.d("Acquired wake lock and wifi lock for rsync transfer")
 
             val processBuilder = ProcessBuilder(commandList)
                 .redirectErrorStream(true)
@@ -134,6 +156,9 @@ class RsyncEngine @Inject constructor(
             } finally {
                 currentProcess = null
                 process.destroyForcibly()
+                if (wakeLock.isHeld) wakeLock.release()
+                if (wifiLock.isHeld) wifiLock.release()
+                Timber.d("Released wake lock and wifi lock")
             }
         }
     }.flowOn(Dispatchers.IO)

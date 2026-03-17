@@ -68,6 +68,7 @@ fun ServerListScreen(
         topBar = {
             GnizaTopAppBar(
                 title = "Servers",
+                onSettingsClick = { navController.navigate("settings") },
                 actions = {
                     IconButton(onClick = { navController.navigate("qrscanner") }) {
                         Icon(

@@ -14,6 +14,7 @@ Android backup solution that automatically backs up folders from your device to 
 - **QR code server setup** — run `gniza-setup.sh` on your server and scan the QR code to auto-configure
 - **Setup wizard** — first-launch guided setup: Server → Source → Schedule
 - **In-app help** — contextual help accessible from every screen
+- **Backup notifications** — real-time progress bar in the status bar (indeterminate while starting, determinate with percentage during transfer), completion notifications for success/failure, lock screen privacy with redacted details, and throttled updates to avoid performance issues
 - **Backup logs** — detailed history with files transferred, bytes synced, duration, and full rsync output
 - **Material 3 UI** — Jetpack Compose with dynamic theming and dark mode
 
@@ -130,7 +131,7 @@ com.gniza.backup
 ├── di                 # Hilt modules
 ├── domain/model       # Domain models (Server, BackupSource, Schedule, BackupLog)
 ├── service
-│   ├── backup         # BackupExecutor, SnapshotManager, notifications
+│   ├── backup         # BackupExecutor, SnapshotManager, BackupNotificationManager
 │   ├── nextcloud      # NextcloudSync, NextcloudConnectionTest (WebDAV)
 │   ├── restore        # RestoreService (snapshot browsing + restore)
 │   ├── rsync          # RsyncBinaryResolver, RsyncCommand, RsyncEngine
@@ -204,7 +205,7 @@ The script displays a QR code in the terminal that the Gniza app can scan to aut
 | `ACCESS_WIFI_STATE` | Enforce Wi-Fi-only constraint |
 | `MANAGE_EXTERNAL_STORAGE` | Access files to back up |
 | `FOREGROUND_SERVICE` | Run backups in foreground |
-| `POST_NOTIFICATIONS` | Backup progress notifications |
+| `POST_NOTIFICATIONS` | Backup progress and completion notifications (runtime permission requested on Android 13+) |
 | `RECEIVE_BOOT_COMPLETED` | Re-schedule backups after reboot |
 
 ## Building

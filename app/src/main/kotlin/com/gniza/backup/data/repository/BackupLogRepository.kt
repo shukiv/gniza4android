@@ -40,6 +40,10 @@ class BackupLogRepository @Inject constructor(
         backupLogDao.deleteOlderThan(cutoff)
     }
 
+    suspend fun deleteAllLogs() {
+        backupLogDao.deleteAll()
+    }
+
     suspend fun markStaleRunningAsFailed() {
         backupLogDao.markStaleRunningAsFailed()
     }
