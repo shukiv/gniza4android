@@ -12,15 +12,22 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -41,6 +48,28 @@ fun RestoreSnapshotListScreen(
     viewModel: RestoreViewModel = hiltViewModel()
 ) {
     val snapshotsState by viewModel.snapshots.collectAsStateWithLifecycle()
+    var snapshotToDelete by remember { mutableStateOf<Snapshot?>(null) }
+
+    snapshotToDelete?.let { snapshot ->
+        AlertDialog(
+            onDismissRequest = { snapshotToDelete = null },
+            title = { Text("Delete Snapshot") },
+            text = { Text("Delete snapshot \"${snapshot.name}\" from the server? This cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteSnapshot(snapshot.name)
+                    snapshotToDelete = null
+                }) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { snapshotToDelete = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -86,7 +115,8 @@ fun RestoreSnapshotListScreen(
                                             .replace("{scheduleId}", viewModel.scheduleId.toString())
                                             .replace("{snapshotName}", Uri.encode(snapshot.name))
                                     )
-                                }
+                                },
+                                onDelete = { snapshotToDelete = snapshot }
                             )
                         }
                         item { Spacer(modifier = Modifier.height(16.dp)) }
@@ -100,7 +130,8 @@ fun RestoreSnapshotListScreen(
 @Composable
 private fun SnapshotCard(
     snapshot: Snapshot,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onDelete: () -> Unit
 ) {
     ElevatedCard(
         onClick = onClick,
@@ -108,7 +139,7 @@ private fun SnapshotCard(
     ) {
         Row(
             modifier = Modifier
-                .padding(16.dp)
+                .padding(start = 16.dp, top = 16.dp, bottom = 16.dp, end = 4.dp)
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -139,6 +170,13 @@ private fun SnapshotCard(
                     text = "Latest",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary
+                )
+            }
+            IconButton(onClick = onDelete) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "Delete snapshot",
+                    tint = MaterialTheme.colorScheme.error
                 )
             }
         }

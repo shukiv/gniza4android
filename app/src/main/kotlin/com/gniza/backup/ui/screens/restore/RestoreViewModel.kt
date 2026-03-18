@@ -81,6 +81,18 @@ class RestoreViewModel @Inject constructor(
         }
     }
 
+    fun deleteSnapshot(snapshotName: String) {
+        val srv = server ?: return
+        viewModelScope.launch {
+            try {
+                restoreService.deleteSnapshot(srv, destPath, snapshotName)
+                loadSnapshots()
+            } catch (e: Exception) {
+                _snapshots.value = UiState.Error(e.message ?: "Failed to delete snapshot")
+            }
+        }
+    }
+
     fun browseSnapshot(snapshotName: String, relativePath: String) {
         val srv = server ?: return
         viewModelScope.launch {

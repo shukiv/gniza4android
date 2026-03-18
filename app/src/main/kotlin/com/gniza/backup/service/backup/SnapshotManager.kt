@@ -108,5 +108,33 @@ class SnapshotManager @Inject constructor(
             .filter { !it.isPartial }
     }
 
+    suspend fun deleteSnapshot(session: Session, basePath: String, snapshotName: String) {
+        val escapedBase = escapeSingleQuotes(basePath)
+        val snapshotsDir = "$escapedBase/${Constants.SNAPSHOT_DIR_NAME}"
+        val snapshotPath = "$snapshotsDir/${escapeSingleQuotes(snapshotName)}"
+
+        Timber.d("Deleting snapshot: %s", snapshotPath)
+        sshCommandExecutor.exec(session, "rm -rf '$snapshotPath'")
+
+        // If we deleted the latest, update the symlink to the newest remaining
+        val latestTarget = getLatestSnapshot(session, basePath)
+        if (latestTarget != null && latestTarget.contains(snapshotName)) {
+            val remaining = sshCommandExecutor.exec(
+                session,
+                "ls -1d '$snapshotsDir'/[0-9]* 2>/dev/null | grep -v '${Constants.SNAPSHOT_PARTIAL_SUFFIX}' | sort -r | head -1"
+            )
+            val latestLink = "$escapedBase/${Constants.SNAPSHOT_LATEST_LINK}"
+            if (remaining.output.isNotBlank()) {
+                val newestDir = remaining.output.trim().substringAfterLast('/')
+                sshCommandExecutor.exec(
+                    session,
+                    "ln -sfn '${Constants.SNAPSHOT_DIR_NAME}/$newestDir' '$latestLink'"
+                )
+            } else {
+                sshCommandExecutor.exec(session, "rm -f '$latestLink'")
+            }
+        }
+    }
+
     private fun escapeSingleQuotes(value: String): String = value.replace("'", "'\\''")
 }

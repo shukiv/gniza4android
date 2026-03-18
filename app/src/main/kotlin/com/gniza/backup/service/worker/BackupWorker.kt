@@ -7,6 +7,7 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
+import com.gniza.backup.data.preferences.AppPreferences
 import com.gniza.backup.data.repository.BackupLogRepository
 import com.gniza.backup.data.repository.BackupSourceRepository
 import com.gniza.backup.data.repository.ScheduleRepository
@@ -14,6 +15,7 @@ import com.gniza.backup.service.backup.BackupExecutor
 import com.gniza.backup.service.backup.BackupNotificationManager
 import com.gniza.backup.service.rsync.RsyncOutput
 import com.gniza.backup.util.FileUtils
+import kotlinx.coroutines.flow.first
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.sync.Mutex
@@ -28,7 +30,8 @@ class BackupWorker @AssistedInject constructor(
     private val scheduleRepository: ScheduleRepository,
     private val backupSourceRepository: BackupSourceRepository,
     private val backupNotificationManager: BackupNotificationManager,
-    private val backupLogRepository: BackupLogRepository
+    private val backupLogRepository: BackupLogRepository,
+    private val appPreferences: AppPreferences
 ) : CoroutineWorker(context, params) {
 
     companion object {
@@ -148,6 +151,14 @@ class BackupWorker @AssistedInject constructor(
             success = result.success,
             message = message
         )
+
+        // Auto-cleanup old logs based on retention setting
+        try {
+            val retentionDays = appPreferences.logRetentionDays.first()
+            backupLogRepository.deleteOldLogs(retentionDays)
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to cleanup old logs")
+        }
 
         return if (result.success) Result.success() else Result.failure()
     }

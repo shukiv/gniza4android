@@ -32,6 +32,16 @@ class RestoreService @Inject constructor(
         }
     }
 
+    suspend fun deleteSnapshot(server: Server, destPath: String, snapshotName: String) {
+        validatePathComponent(snapshotName, "snapshotName")
+        val session = sshCommandExecutor.openSession(server)
+        try {
+            snapshotManager.deleteSnapshot(session, destPath, snapshotName)
+        } finally {
+            session.disconnect()
+        }
+    }
+
     suspend fun browseSnapshot(
         server: Server,
         destPath: String,
