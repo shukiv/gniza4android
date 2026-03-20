@@ -301,15 +301,23 @@ class BackupExecutor @Inject constructor(
             if (success) {
                 // 6. Finalize: rename .partial to final, update latest symlink
                 snapshotManager.finalizeSnapshot(session, basePath, snapshotName)
+            } else {
+                // Clean up failed partial transfer
+                try {
+                    snapshotManager.cleanStalePartials(session, basePath)
+                    outputLines.appendLine("Cleaned up partial snapshot after failure")
+                } catch (e: Exception) {
+                    Timber.w(e, "Failed to clean up partial snapshot (non-fatal)")
+                }
+            }
 
-                // 7. Enforce retention
-                if (schedule.snapshotRetention > 0) {
-                    try {
-                        snapshotManager.enforceRetention(session, basePath, schedule.snapshotRetention)
-                    } catch (e: Exception) {
-                        Timber.w(e, "Snapshot retention enforcement failed (non-fatal)")
-                        outputLines.appendLine("Warning: retention cleanup failed: ${e.message}")
-                    }
+            // 7. Enforce retention (on both success and failure)
+            if (schedule.snapshotRetention > 0) {
+                try {
+                    snapshotManager.enforceRetention(session, basePath, schedule.snapshotRetention)
+                } catch (e: Exception) {
+                    Timber.w(e, "Snapshot retention enforcement failed (non-fatal)")
+                    outputLines.appendLine("Warning: retention cleanup failed: ${e.message}")
                 }
             }
 
