@@ -20,6 +20,15 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("../gniza-release.keystore")
+            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "gniza2026release"
+            keyAlias = "gniza"
+            keyPassword = System.getenv("KEY_PASSWORD") ?: "gniza2026release"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -28,6 +37,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
