@@ -187,7 +187,7 @@ com.gniza.backup
 | WorkManager | Scheduled background backups |
 | JSch | SSH/SFTP connections, key generation |
 | OkHttp | Nextcloud WebDAV communication |
-| CameraX + ML Kit | QR code scanning |
+| CameraX + zxing-cpp | QR code scanning |
 | android-rsync | Bundled rsync binaries |
 
 ## Server Setup Script
@@ -291,6 +291,59 @@ curl -sL https://matt.ucc.asn.au/dropbear/releases/dropbear-2024.86.tar.bz2 | ta
 ./scripts/build-dropbear.sh armeabi-v7a armv7a-linux-androideabi
 ./scripts/build-dropbear.sh x86_64 x86_64-linux-android
 ```
+
+## Publishing
+
+### Google Play
+
+1. **Create a keystore** (if not already done):
+
+```bash
+keytool -genkey -v -keystore gniza-release.keystore -alias gniza \
+    -keyalg RSA -keysize 2048 -validity 10000
+```
+
+2. **Build the signed AAB** (required by Google Play):
+
+```bash
+./gradlew bundleRelease
+# Output: app/build/outputs/bundle/release/app-release.aab
+```
+
+The release signing config in `build.gradle.kts` reads the keystore from `gniza-release.keystore` at the project root. Set `KEYSTORE_PASSWORD` and `KEY_PASSWORD` environment variables, or update `build.gradle.kts` with your credentials.
+
+3. **Set up in Google Play Console** (https://play.google.com/console):
+
+| Step | Where | What |
+|------|-------|------|
+| Create app | Dashboard → Create app | Name: `Gniza Backup`, Free, Category: Tools |
+| Store listing | Grow users → Main store listing | App name, descriptions, screenshots, icon |
+| Privacy policy | Policy → App content | URL: `https://gniza.app/privacy` |
+| Content rating | Policy → App content | Complete questionnaire (no violence, no ads, no personal data) |
+| Target audience | Policy → App content | 13+ |
+| Data safety | Policy → App content | No user data collected, data encrypted in transit (SSH/TLS) |
+| Internal testing | Test and release → Internal testing | Upload `app-release.aab` |
+| Production | Test and release → Production | Create release, submit for review |
+
+**Store listing content:**
+
+- **Short description** (< 80 chars): `Back up Android folders to SSH or Nextcloud servers automatically`
+- **Full description**: see `fastlane/metadata/android/en-US/full_description.txt`
+- **Screenshots**: see `fastlane/metadata/android/en-US/images/phoneScreenshots/`
+- **Icon**: see `fastlane/metadata/android/en-US/images/icon.png`
+
+**Important:** Back up your keystore file — if lost, you can never update the app on Google Play.
+
+### F-Droid
+
+The app is submitted to F-Droid via a merge request to [fdroiddata](https://gitlab.com/fdroid/fdroiddata). The metadata file is at `metadata/com.gniza.backup.yml` in the fdroiddata repo. Fastlane metadata in this repo (`fastlane/metadata/android/`) provides the store listing content.
+
+To update the F-Droid listing after a new release:
+
+1. Bump `versionCode` and `versionName` in `app/build.gradle.kts`
+2. Commit and tag: `git tag v<version>`
+3. Push: `git push origin main --tags`
+4. F-Droid auto-update picks up new tags automatically (configured via `AutoUpdateMode: Version` and `UpdateCheckMode: Tags`)
 
 ## License
 
