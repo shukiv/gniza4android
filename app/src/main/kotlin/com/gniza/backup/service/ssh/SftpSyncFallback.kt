@@ -1,12 +1,15 @@
 package com.gniza.backup.service.ssh
 
 import com.gniza.backup.domain.model.AuthMethod
+import com.gniza.backup.domain.model.RemoteFileEntry
 import com.gniza.backup.domain.model.Server
+import com.gniza.backup.service.rsync.RsyncOutput
 import com.jcraft.jsch.ChannelSftp
 import com.jcraft.jsch.JSch
 import com.jcraft.jsch.Session
 import com.jcraft.jsch.SftpATTRS
 import com.jcraft.jsch.SftpException
+import com.jcraft.jsch.SftpProgressMonitor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -163,6 +166,43 @@ class SftpSyncFallback @Inject constructor() {
         }
     }
 
+    suspend fun uploadContent(server: Server, remotePath: String, content: String) = withContext(Dispatchers.IO) {
+        var session: Session? = null
+        var channel: ChannelSftp? = null
+
+        try {
+            val jsch = JSch()
+
+            if (server.authMethod == AuthMethod.SSH_KEY && server.privateKeyPath != null) {
+                if (server.privateKeyPassphrase != null) {
+                    jsch.addIdentity(server.privateKeyPath, server.privateKeyPassphrase)
+                } else {
+                    jsch.addIdentity(server.privateKeyPath)
+                }
+            }
+
+            session = jsch.getSession(server.username, server.host, server.port)
+
+            if (server.authMethod == AuthMethod.PASSWORD && server.password != null) {
+                session.setPassword(server.password)
+            }
+
+            val config = Properties()
+            config["StrictHostKeyChecking"] = "no"
+            session.setConfig(config)
+            session.connect(CONNECT_TIMEOUT_MS)
+
+            channel = session.openChannel("sftp") as ChannelSftp
+            channel.connect(CONNECT_TIMEOUT_MS)
+
+            val inputStream = java.io.ByteArrayInputStream(content.toByteArray(Charsets.UTF_8))
+            channel.put(inputStream, remotePath, ChannelSftp.OVERWRITE)
+        } finally {
+            channel?.disconnect()
+            session?.disconnect()
+        }
+    }
+
     private fun ensureRemoteDir(channel: ChannelSftp, path: String) {
         val parts = path.split("/").filter { it.isNotEmpty() }
         var current = ""
@@ -174,5 +214,177 @@ class SftpSyncFallback @Inject constructor() {
                 channel.mkdir(current)
             }
         }
+    }
+
+    suspend fun listRemoteDir(
+        server: Server,
+        remotePath: String
+    ): List<RemoteFileEntry> = withContext(Dispatchers.IO) {
+        var session: Session? = null
+        var channel: ChannelSftp? = null
+
+        try {
+            val jsch = JSch()
+
+            if (server.authMethod == AuthMethod.SSH_KEY && server.privateKeyPath != null) {
+                if (server.privateKeyPassphrase != null) {
+                    jsch.addIdentity(server.privateKeyPath, server.privateKeyPassphrase)
+                } else {
+                    jsch.addIdentity(server.privateKeyPath)
+                }
+            }
+
+            session = jsch.getSession(server.username, server.host, server.port)
+
+            if (server.authMethod == AuthMethod.PASSWORD && server.password != null) {
+                session.setPassword(server.password)
+            }
+
+            val config = Properties()
+            config["StrictHostKeyChecking"] = "no"
+            session.setConfig(config)
+            session.connect(CONNECT_TIMEOUT_MS)
+
+            channel = session.openChannel("sftp") as ChannelSftp
+            channel.connect(CONNECT_TIMEOUT_MS)
+
+            @Suppress("UNCHECKED_CAST")
+            val lsEntries = channel.ls(remotePath) as java.util.Vector<ChannelSftp.LsEntry>
+
+            lsEntries
+                .filter { it.filename != "." && it.filename != ".." }
+                .filter { !it.filename.contains("..") && !it.filename.contains('/') }
+                .map { entry ->
+                    RemoteFileEntry(
+                        name = entry.filename,
+                        path = entry.filename,
+                        isDirectory = entry.attrs.isDir,
+                        size = entry.attrs.size,
+                        modifiedAt = entry.attrs.mTime.toLong() * 1000L
+                    )
+                }
+        } catch (e: Exception) {
+            Timber.e(e, "SFTP listRemoteDir failed: $remotePath")
+            emptyList()
+        } finally {
+            channel?.disconnect()
+            session?.disconnect()
+        }
+    }
+
+    suspend fun downloadFile(
+        server: Server,
+        remotePath: String,
+        localFile: File,
+        onProgress: (RsyncOutput) -> Unit
+    ): SyncResult = withContext(Dispatchers.IO) {
+        var session: Session? = null
+        var channel: ChannelSftp? = null
+        var filesTransferred = 0
+        var bytesTransferred = 0L
+
+        try {
+            val jsch = JSch()
+
+            if (server.authMethod == AuthMethod.SSH_KEY && server.privateKeyPath != null) {
+                if (server.privateKeyPassphrase != null) {
+                    jsch.addIdentity(server.privateKeyPath, server.privateKeyPassphrase)
+                } else {
+                    jsch.addIdentity(server.privateKeyPath)
+                }
+            }
+
+            session = jsch.getSession(server.username, server.host, server.port)
+
+            if (server.authMethod == AuthMethod.PASSWORD && server.password != null) {
+                session.setPassword(server.password)
+            }
+
+            val config = Properties()
+            config["StrictHostKeyChecking"] = "no"
+            session.setConfig(config)
+            session.connect(CONNECT_TIMEOUT_MS)
+
+            channel = session.openChannel("sftp") as ChannelSftp
+            channel.connect(CONNECT_TIMEOUT_MS)
+
+            val attrs = channel.stat(remotePath)
+            if (attrs.isDir) {
+                val result = downloadDirectoryRecursive(channel, remotePath, localFile, onProgress)
+                filesTransferred = result.first
+                bytesTransferred = result.second
+            } else {
+                localFile.parentFile?.mkdirs()
+                onProgress(RsyncOutput.Log("Downloading: ${localFile.name}"))
+                val monitor = object : SftpProgressMonitor {
+                    private var transferred = 0L
+                    override fun init(op: Int, src: String?, dest: String?, max: Long) {}
+                    override fun count(count: Long): Boolean {
+                        transferred += count
+                        return true
+                    }
+                    override fun end() {
+                        bytesTransferred = transferred
+                        onProgress(RsyncOutput.Log("Downloaded: ${localFile.name} ($transferred bytes)"))
+                    }
+                }
+                channel.get(remotePath, localFile.absolutePath, monitor)
+                filesTransferred = 1
+            }
+
+            SyncResult(
+                success = true,
+                filesTransferred = filesTransferred,
+                bytesTransferred = bytesTransferred,
+                errorMessage = null
+            )
+        } catch (e: Exception) {
+            Timber.e(e, "SFTP download failed: $remotePath")
+            SyncResult(
+                success = false,
+                filesTransferred = filesTransferred,
+                bytesTransferred = bytesTransferred,
+                errorMessage = e.message ?: "Unknown SFTP download error"
+            )
+        } finally {
+            channel?.disconnect()
+            session?.disconnect()
+        }
+    }
+
+    private fun downloadDirectoryRecursive(
+        channel: ChannelSftp,
+        remotePath: String,
+        localDir: File,
+        onProgress: (RsyncOutput) -> Unit
+    ): Pair<Int, Long> {
+        localDir.mkdirs()
+        var filesTransferred = 0
+        var bytesTransferred = 0L
+
+        @Suppress("UNCHECKED_CAST")
+        val lsEntries = channel.ls(remotePath) as java.util.Vector<ChannelSftp.LsEntry>
+
+        for (entry in lsEntries) {
+            if (entry.filename == "." || entry.filename == "..") continue
+            if (entry.filename.contains("..") || entry.filename.contains('/')) continue
+
+            val remoteFilePath = "$remotePath/${entry.filename}"
+            val localFile = File(localDir, entry.filename)
+
+            if (entry.attrs.isDir) {
+                val result = downloadDirectoryRecursive(channel, remoteFilePath, localFile, onProgress)
+                filesTransferred += result.first
+                bytesTransferred += result.second
+            } else {
+                onProgress(RsyncOutput.Log("Downloading: ${entry.filename}"))
+                channel.get(remoteFilePath, localFile.absolutePath)
+                filesTransferred++
+                bytesTransferred += entry.attrs.size
+                onProgress(RsyncOutput.Log("Downloaded: ${entry.filename} (${entry.attrs.size} bytes)"))
+            }
+        }
+
+        return Pair(filesTransferred, bytesTransferred)
     }
 }

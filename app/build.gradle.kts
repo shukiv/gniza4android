@@ -116,7 +116,7 @@ dependencies {
     implementation(libs.timber)
 
     // QR Scanner
-    implementation(libs.mlkit.barcode)
+    implementation(libs.zxing.cpp)
     implementation(libs.camera.camera2)
     implementation(libs.camera.lifecycle)
     implementation(libs.camera.view)

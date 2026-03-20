@@ -13,6 +13,7 @@ import timber.log.Timber
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
+import okhttp3.ConnectionPool
 
 class NextcloudConnectionTest @Inject constructor() {
 
@@ -24,6 +25,7 @@ class NextcloudConnectionTest @Inject constructor() {
     private val client = OkHttpClient.Builder()
         .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .connectionPool(ConnectionPool(5, 30, TimeUnit.SECONDS))
         .build()
 
     suspend fun testConnection(server: Server): ConnectionTestResult = withContext(Dispatchers.IO) {

@@ -43,6 +43,7 @@ import com.gniza.backup.ui.MainViewModel
 import com.gniza.backup.ui.navigation.BottomNavBar
 import com.gniza.backup.ui.navigation.GnizaNavHost
 import com.gniza.backup.ui.navigation.Screen
+import androidx.compose.foundation.isSystemInDarkTheme
 import com.gniza.backup.ui.theme.GnizaTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -67,7 +68,13 @@ class MainActivity : ComponentActivity() {
         checkBatteryExemption()
         checkNotificationPermission()
         setContent {
-            GnizaTheme {
+            val themeMode by mainViewModel.darkThemeMode.collectAsState()
+            val darkTheme = when (themeMode) {
+                "dark" -> true
+                "light" -> false
+                else -> isSystemInDarkTheme()
+            }
+            GnizaTheme(darkTheme = darkTheme) {
                 if (!hasStoragePermission && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                         Column(

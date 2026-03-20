@@ -22,6 +22,9 @@ interface BackupLogDao {
     @Query("SELECT * FROM backup_logs WHERE scheduleId = :scheduleId ORDER BY startedAt DESC")
     fun getByScheduleId(scheduleId: Long): Flow<List<BackupLogEntity>>
 
+    @Query("SELECT id, sourceId, sourceName, serverName, scheduleId, scheduleName, startedAt, completedAt, status, filesTransferred, bytesTransferred, totalFiles, NULL as rsyncOutput, errorMessage, durationSeconds, snapshotName FROM backup_logs WHERE id IN (SELECT MAX(id) FROM backup_logs GROUP BY scheduleId)")
+    fun getLatestPerSchedule(): Flow<List<BackupLogEntity>>
+
     @Query("SELECT * FROM backup_logs WHERE id = :id")
     fun getById(id: Long): Flow<BackupLogEntity?>
 

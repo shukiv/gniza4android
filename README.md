@@ -6,16 +6,16 @@ Android backup solution that automatically backs up folders from your device to 
 
 - **Bundled rsync + SSH binaries** — ships with rsync and Dropbear dbclient for arm64-v8a, armeabi-v7a, and x86_64
 - **Incremental snapshot backups** — rsync with hardlinked snapshots for space-efficient versioned backups (like Time Machine)
-- **Snapshot restore** — browse and restore files from any snapshot directly from the app
-- **Scheduled backups** — hourly, daily, or weekly via WorkManager with Wi-Fi-only and charging constraints
-- **Nextcloud support** — back up to Nextcloud via WebDAV with incremental sync (size-based comparison)
+- **Restore** — browse and restore files from any backup directly from the app (snapshot-based SSH, flat SSH, and Nextcloud via WebDAV)
+- **Scheduled backups** — hourly, daily, or weekly via WorkManager with Wi-Fi-only and charging constraints; automatic retry with backoff for transient network errors
+- **Nextcloud support** — back up to Nextcloud via WebDAV with incremental sync (size-based comparison); connection pool cleanup for battery efficiency
 - **SFTP fallback** — automatic fallback when rsync is unavailable on the SSH server
 - **SSH key management** — generate RSA, DSA, ECDSA, or Ed25519 key pairs directly in the app
 - **QR code server setup** — run `gniza-setup.sh` on your server and scan the QR code to auto-configure
 - **Setup wizard** — first-launch guided setup: Server → Source → Schedule
 - **In-app help** — contextual help accessible from every screen
 - **Backup notifications** — real-time progress bar in the status bar (indeterminate while starting, determinate with percentage during transfer), completion notifications for success/failure, lock screen privacy with redacted details, and throttled updates to avoid performance issues
-- **Backup logs** — detailed history with files transferred, bytes synced, duration, and full rsync output
+- **Backup logs** — detailed history with files transferred, bytes synced, duration, and full rsync output; efficient queries with per-schedule latest-log lookups
 - **Material 3 UI** — Jetpack Compose with dynamic theming and dark mode
 
 ## Quick Start
@@ -64,8 +64,8 @@ On first launch, the setup wizard guides you through:
 
 Gniza supports two backup destination types:
 
-- **SSH servers** — uses rsync over SSH for efficient incremental transfers (with SFTP as a fallback). When snapshot retention is enabled, each backup creates a dated snapshot with hardlinks to unchanged files, providing versioned backups with minimal disk usage
-- **Nextcloud** — uses WebDAV to upload files, skipping those whose size already matches on the server
+- **SSH servers** — uses rsync over SSH for efficient incremental transfers (with SFTP as a fallback). When snapshot retention is enabled, each backup creates a dated snapshot with hardlinks to unchanged files, providing versioned backups with minimal disk usage. Restore downloads files via rsync or SFTP
+- **Nextcloud** — uses WebDAV to upload files, skipping those whose size already matches on the server. Restore browses files via WebDAV PROPFIND and downloads via HTTP GET
 
 ```
 Android Device                    SSH Server
@@ -105,9 +105,26 @@ When snapshot retention is set to a value greater than 0, Gniza creates dated sn
 - **Space efficient** — unchanged files are hardlinked across snapshots, using no extra disk space
 - **Crash safe** — transfers go to a `.partial` directory first, renamed atomically on completion
 - **Configurable retention** — set how many snapshots to keep (oldest are pruned automatically)
-- **Restore** — browse any snapshot and restore individual files or entire snapshots to your device
+- **Restore** — browse any snapshot and restore individual files or entire directories to your device
 
-When snapshot retention is 0 (the default for existing schedules), backups use the legacy flat rsync mode.
+When snapshot retention is 0 (the default for existing schedules), backups use flat mode — files are synced directly to the destination directory without snapshots. Flat backups can also be browsed and restored from the app.
+
+### Error Handling & Retry
+
+Gniza classifies backup errors as transient or permanent:
+
+- **Transient errors** (connection refused, timeout, network unreachable) trigger automatic retry with backoff -- linear at 15-minute intervals for periodic backups, exponential starting at 10 minutes for one-time backups
+- **Permanent errors** (authentication failure, missing directory, permission denied) are reported immediately as failures without retry
+
+Nextcloud connections use a managed connection pool (5 connections, 30-second idle timeout) to release sockets promptly and reduce battery drain from idle keep-alives.
+
+### Restore
+
+Restore is available for all backup types:
+
+- **Snapshot SSH backups** — pick a snapshot, browse its directory tree, and download files or directories via rsync (or SFTP if rsync is unavailable on the server)
+- **Flat SSH backups** — browse the destination directory directly and download via rsync or SFTP
+- **Nextcloud backups** — browse files via WebDAV PROPFIND and download via HTTP GET
 
 **Binary detection order:**
 
@@ -133,7 +150,7 @@ com.gniza.backup
 ├── service
 │   ├── backup         # BackupExecutor, SnapshotManager, BackupNotificationManager
 │   ├── nextcloud      # NextcloudSync, NextcloudConnectionTest (WebDAV)
-│   ├── restore        # RestoreService (snapshot browsing + restore)
+│   ├── restore        # RestoreService (browsing + restore for all backup types)
 │   ├── rsync          # RsyncBinaryResolver, RsyncCommand, RsyncEngine
 │   ├── ssh            # SshKeyManager, SshBinaryResolver, SshCommandExecutor, SftpSyncFallback
 │   └── worker         # BackupWorker, BackupScheduler (WorkManager)
@@ -144,7 +161,7 @@ com.gniza.backup
 │   │   ├── servers        # Server CRUD
 │   │   ├── sources        # Source CRUD
 │   │   ├── schedules      # Schedule management + backup execution
-│   │   ├── restore        # Snapshot browsing + file restore
+│   │   ├── restore        # Backup browsing + file restore
 │   │   ├── logs           # Backup log history
 │   │   ├── settings       # App settings, binary status
 │   │   ├── sshkeys        # SSH key management

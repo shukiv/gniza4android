@@ -58,6 +58,7 @@ import com.gniza.backup.ui.components.LoadingIndicator
 import com.gniza.backup.ui.components.StatusBadge
 import com.gniza.backup.ui.navigation.Screen
 import com.gniza.backup.ui.util.UiState
+import com.gniza.backup.util.Constants
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -155,12 +156,20 @@ fun ScheduleListScreen(
                                 onRunNow = { viewModel.runNow(item.schedule.id) },
                                 onStop = { viewModel.stopBackup(item.schedule.id) },
                                 onRestore = {
-                                    navController.navigate(
-                                        Screen.RestoreSnapshotList.route.replace(
-                                            "{scheduleId}",
-                                            item.schedule.id.toString()
+                                    if (item.schedule.snapshotRetention > 0) {
+                                        navController.navigate(
+                                            Screen.RestoreSnapshotList.route.replace(
+                                                "{scheduleId}",
+                                                item.schedule.id.toString()
+                                            )
                                         )
-                                    )
+                                    } else {
+                                        navController.navigate(
+                                            Screen.RestoreSnapshotBrowse.route
+                                                .replace("{scheduleId}", item.schedule.id.toString())
+                                                .replace("{snapshotName}", Constants.FLAT_BROWSE_SENTINEL)
+                                        )
+                                    }
                                 }
                             )
                         }
@@ -254,14 +263,12 @@ private fun ScheduleCard(
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.weight(1f)
                     )
-                    if (schedule.snapshotRetention > 0) {
-                        IconButton(onClick = onRestore) {
-                            Icon(
-                                imageVector = Icons.Default.Restore,
-                                contentDescription = "Restore from snapshot",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
+                    IconButton(onClick = onRestore) {
+                        Icon(
+                            imageVector = Icons.Default.Restore,
+                            contentDescription = "Restore from backup",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
                     IconButton(onClick = onDelete) {
                         Icon(

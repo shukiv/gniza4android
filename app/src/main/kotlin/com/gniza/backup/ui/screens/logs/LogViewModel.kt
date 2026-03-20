@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -34,7 +35,7 @@ class LogViewModel @Inject constructor(
 
     val logs: StateFlow<UiState<List<BackupLog>>> =
         combine(
-            backupLogRepository.allLogs,
+            backupLogRepository.allLogs.distinctUntilChanged(),
             _filter
         ) { allLogs, currentFilter ->
             val filtered = when (currentFilter) {

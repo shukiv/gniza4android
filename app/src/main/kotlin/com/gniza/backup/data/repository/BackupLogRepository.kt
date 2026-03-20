@@ -15,6 +15,10 @@ class BackupLogRepository @Inject constructor(
         entities.map { it.toBackupLog() }
     }
 
+    val latestPerSchedule: Flow<List<BackupLog>> = backupLogDao.getLatestPerSchedule().map { entities ->
+        entities.map { it.toBackupLog() }
+    }
+
     fun getLogsBySource(sourceId: Long): Flow<List<BackupLog>> =
         backupLogDao.getBySourceId(sourceId).map { entities ->
             entities.map { it.toBackupLog() }

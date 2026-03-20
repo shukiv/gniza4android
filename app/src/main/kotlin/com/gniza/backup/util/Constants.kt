@@ -19,10 +19,14 @@ object Constants {
 
     const val BUNDLED_WORMHOLE_LIB = "libwormhole.so"
 
-    val RSYNC_SNAPSHOT_FLAGS = listOf("-aHAX", "--numeric-ids", "--delete", "--sparse", "-z", "--progress", "--partial")
+    val RSYNC_SNAPSHOT_FLAGS = listOf("-aH", "--numeric-ids", "--delete", "--sparse", "-z", "--progress", "--partial")
 
     const val SNAPSHOT_DIR_NAME = "snapshots"
     const val SNAPSHOT_LATEST_LINK = "latest"
     const val SNAPSHOT_PARTIAL_SUFFIX = ".partial"
     const val SNAPSHOT_DATE_FORMAT = "yyyy-MM-dd'T'HHmmss"
+
+    const val FLAT_BROWSE_SENTINEL = "__flat__"
+
+    const val REMOTE_LOG_FILENAME = "backup.log"
 }

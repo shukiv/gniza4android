@@ -16,10 +16,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.gniza.backup.R
@@ -50,22 +57,29 @@ fun GnizaTopAppBar(
         )
     } else {
         // Main screen: show logo + GNIZA brand
+        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
         TopAppBar(
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Image(
                         painter = painterResource(id = R.drawable.ic_gniza_logo),
                         contentDescription = "Gniza",
-                        modifier = Modifier.height(28.dp)
+                        modifier = Modifier.height(36.dp)
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = "G N I Z A",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Light,
-                            letterSpacing = 4.sp
-                        ),
-                        color = MaterialTheme.colorScheme.onSurface
+                        text = buildAnnotatedString {
+                            withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurface)) {
+                                append("GNIZA")
+                            }
+                            append(" ")
+                            withStyle(SpanStyle(color = Color(0xFFEE7A00))) {
+                                append("Backup")
+                            }
+                        },
+                        style = MaterialTheme.typography.headlineMedium.copy(
+                            fontWeight = FontWeight.Light
+                        )
                     )
                 }
             },
@@ -82,5 +96,6 @@ fun GnizaTopAppBar(
                 }
             }
         )
+        }
     }
 }

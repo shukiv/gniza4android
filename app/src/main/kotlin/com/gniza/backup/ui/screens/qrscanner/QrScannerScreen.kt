@@ -45,9 +45,8 @@ import com.gniza.backup.domain.model.Server
 import com.gniza.backup.service.ssh.SshKeyManager
 import com.gniza.backup.ui.components.GnizaTopAppBar
 import com.gniza.backup.util.Constants
-import com.google.mlkit.vision.barcode.BarcodeScanning
-import com.google.mlkit.vision.barcode.common.Barcode
-import com.google.mlkit.vision.common.InputImage
+import timber.log.Timber
+import zxingcpp.BarcodeReader
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -265,7 +264,15 @@ fun QrScannerScreen(
                                 val previewView = PreviewView(ctx)
                                 val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
                                 val executor = Executors.newSingleThreadExecutor()
-                                val barcodeScanner = BarcodeScanning.getClient()
+                                val barcodeReader = BarcodeReader().apply {
+                                    options = options.copy(
+                                        formats = setOf(BarcodeReader.Format.QR_CODE),
+                                        tryHarder = true,
+                                        tryRotate = true,
+                                        tryDownscale = true,
+                                        tryInvert = true
+                                    )
+                                }
 
                                 cameraProviderFuture.addListener({
                                     val cameraProvider = cameraProviderFuture.get()
@@ -273,35 +280,26 @@ fun QrScannerScreen(
                                         it.surfaceProvider = previewView.surfaceProvider
                                     }
 
-                                    @androidx.annotation.OptIn(androidx.camera.core.ExperimentalGetImage::class)
                                     val imageAnalysis = ImageAnalysis.Builder()
-                                        .setTargetResolution(Size(1280, 720))
+                                        .setTargetResolution(Size(1920, 1080))
                                         .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                                         .build()
                                         .also { analysis ->
                                             analysis.setAnalyzer(executor) { imageProxy ->
-                                                val mediaImage = imageProxy.image
-                                                if (mediaImage != null && qrState is QrScannerViewModel.QrState.Scanning) {
-                                                    val inputImage = InputImage.fromMediaImage(
-                                                        mediaImage,
-                                                        imageProxy.imageInfo.rotationDegrees
-                                                    )
-                                                    barcodeScanner.process(inputImage)
-                                                        .addOnSuccessListener { barcodes ->
-                                                            for (barcode in barcodes) {
-                                                                if (barcode.valueType == Barcode.TYPE_TEXT) {
-                                                                    val raw = barcode.rawValue ?: continue
-                                                                    if (raw.contains("\"gniza\"")) {
-                                                                        viewModel.processQrCode(raw)
-                                                                        return@addOnSuccessListener
-                                                                    }
-                                                                }
+                                                try {
+                                                    if (qrState is QrScannerViewModel.QrState.Scanning) {
+                                                        val results = barcodeReader.read(imageProxy)
+                                                        for (result in results) {
+                                                            val raw = result.text ?: continue
+                                                            if (raw.contains("\"gniza\"")) {
+                                                                viewModel.processQrCode(raw)
+                                                                break
                                                             }
                                                         }
-                                                        .addOnCompleteListener {
-                                                            imageProxy.close()
-                                                        }
-                                                } else {
+                                                    }
+                                                } catch (e: Exception) {
+                                                    Timber.w(e, "QR scan frame error")
+                                                } finally {
                                                     imageProxy.close()
                                                 }
                                             }

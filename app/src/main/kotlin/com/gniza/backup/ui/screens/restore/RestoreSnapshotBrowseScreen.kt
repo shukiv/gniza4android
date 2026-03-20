@@ -44,6 +44,7 @@ import com.gniza.backup.ui.components.EmptyState
 import com.gniza.backup.ui.components.GnizaTopAppBar
 import com.gniza.backup.ui.components.LoadingIndicator
 import com.gniza.backup.ui.util.UiState
+import com.gniza.backup.util.Constants
 import com.gniza.backup.util.FileUtils
 
 @Composable
@@ -52,6 +53,7 @@ fun RestoreSnapshotBrowseScreen(
     snapshotName: String,
     viewModel: RestoreViewModel = hiltViewModel()
 ) {
+    val isFlat = snapshotName == Constants.FLAT_BROWSE_SENTINEL
     val filesState by viewModel.files.collectAsStateWithLifecycle()
     val currentPath by viewModel.currentPath.collectAsStateWithLifecycle()
     val restoreState by viewModel.restoreState.collectAsStateWithLifecycle()
@@ -62,7 +64,7 @@ fun RestoreSnapshotBrowseScreen(
     Scaffold(
         topBar = {
             GnizaTopAppBar(
-                title = snapshotName,
+                title = if (isFlat) "Browse Backup" else snapshotName,
                 onNavigateBack = { navController.popBackStack() },
                 actions = {
                     IconButton(
@@ -93,7 +95,9 @@ fun RestoreSnapshotBrowseScreen(
                         .padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = { viewModel.navigateUp(snapshotName) }) {
+                    IconButton(onClick = {
+                        if (isFlat) viewModel.navigateUpFlat() else viewModel.navigateUp(snapshotName)
+                    }) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Go up"
@@ -190,7 +194,11 @@ fun RestoreSnapshotBrowseScreen(
                                     entry = entry,
                                     onTap = {
                                         if (entry.isDirectory) {
-                                            viewModel.browseSnapshot(snapshotName, entry.path)
+                                            if (isFlat) {
+                                                viewModel.browseFlat(entry.path)
+                                            } else {
+                                                viewModel.browseSnapshot(snapshotName, entry.path)
+                                            }
                                         } else {
                                             restorePath = entry.path
                                             showRestoreDialog = true
@@ -233,7 +241,11 @@ fun RestoreSnapshotBrowseScreen(
             confirmButton = {
                 Button(onClick = {
                     showRestoreDialog = false
-                    viewModel.restoreFile(snapshotName, restorePath, defaultLocalPath)
+                    viewModel.restoreFile(
+                        if (isFlat) null else snapshotName,
+                        restorePath,
+                        defaultLocalPath
+                    )
                 }) {
                     Text("Restore")
                 }

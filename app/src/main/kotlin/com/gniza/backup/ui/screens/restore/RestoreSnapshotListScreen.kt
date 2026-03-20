@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import com.gniza.backup.domain.model.ServerType
 import com.gniza.backup.domain.model.Snapshot
 import com.gniza.backup.ui.components.EmptyState
 import com.gniza.backup.ui.components.GnizaTopAppBar
@@ -109,6 +110,7 @@ fun RestoreSnapshotListScreen(
                         items(state.data) { snapshot ->
                             SnapshotCard(
                                 snapshot = snapshot,
+                                showDelete = viewModel.serverType != ServerType.NEXTCLOUD,
                                 onClick = {
                                     navController.navigate(
                                         Screen.RestoreSnapshotBrowse.route
@@ -130,6 +132,7 @@ fun RestoreSnapshotListScreen(
 @Composable
 private fun SnapshotCard(
     snapshot: Snapshot,
+    showDelete: Boolean = true,
     onClick: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -172,12 +175,14 @@ private fun SnapshotCard(
                     color = MaterialTheme.colorScheme.primary
                 )
             }
-            IconButton(onClick = onDelete) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "Delete snapshot",
-                    tint = MaterialTheme.colorScheme.error
-                )
+            if (showDelete) {
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete snapshot",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
             }
         }
     }

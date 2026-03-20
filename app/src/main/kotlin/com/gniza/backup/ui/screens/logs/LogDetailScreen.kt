@@ -11,20 +11,25 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -47,6 +52,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -75,6 +81,8 @@ fun LogDetailScreen(
 ) {
     val logState by viewModel.log.collectAsState()
     val context = LocalContext.current
+    val scrollState = rememberScrollState()
+    val coroutineScope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
@@ -82,6 +90,22 @@ fun LogDetailScreen(
                 title = "Log Details",
                 onNavigateBack = onNavigateBack
             )
+        },
+        floatingActionButton = {
+            if (logState is UiState.Success) {
+                SmallFloatingActionButton(
+                    onClick = {
+                        coroutineScope.launch {
+                            scrollState.animateScrollTo(scrollState.maxValue)
+                        }
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowDown,
+                        contentDescription = "Scroll to bottom"
+                    )
+                }
+            }
         }
     ) { innerPadding ->
         when (val state = logState) {
@@ -101,6 +125,7 @@ fun LogDetailScreen(
                 LogDetailContent(
                     log = state.data,
                     context = context,
+                    scrollState = scrollState,
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(innerPadding)
@@ -114,10 +139,10 @@ fun LogDetailScreen(
 private fun LogDetailContent(
     log: BackupLog,
     context: Context,
+    scrollState: androidx.compose.foundation.ScrollState,
     modifier: Modifier = Modifier
 ) {
     val dateFormat = SimpleDateFormat("MMM dd, yyyy HH:mm:ss", Locale.getDefault())
-    val scrollState = rememberScrollState()
 
     Column(
         modifier = modifier

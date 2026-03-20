@@ -1,0 +1,16 @@
+Gniza automatically backs up folders from your Android device to a remote server. It supports SSH servers (via rsync or SFTP) and Nextcloud (via WebDAV). No Termux or root required — rsync and SSH (Dropbear) binaries are bundled.
+
+Features:
+• Incremental snapshot backups with hardlinked snapshots (like Time Machine)
+• Browse and restore files from any backup directly in the app
+• Scheduled backups — hourly, daily, or weekly with Wi-Fi-only and charging constraints
+• Nextcloud support via WebDAV with incremental sync
+• Automatic SFTP fallback when rsync is unavailable on the server
+• SSH key management — generate RSA, DSA, ECDSA, or Ed25519 keys
+• QR code server setup — run a script on your server and scan to auto-configure
+• Setup wizard for first-launch guided configuration
+• Backup notifications with real-time progress
+• Detailed backup logs with full rsync output
+• Material 3 UI with dynamic theming and dark mode
+
+Gniza bundles rsync and Dropbear SSH binaries for arm64-v8a, armeabi-v7a, and x86_64 architectures.

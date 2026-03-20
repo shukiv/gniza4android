@@ -1,6 +1,7 @@
 package com.gniza.backup.service.worker
 
 import android.content.Context
+import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
@@ -47,6 +48,7 @@ class BackupScheduler @Inject constructor(
             .setConstraints(constraints)
             .setInputData(inputData)
             .addTag(workName(schedule.id))
+            .setBackoffCriteria(BackoffPolicy.LINEAR, 15, TimeUnit.MINUTES)
             .build()
 
         workManager.enqueueUniquePeriodicWork(
@@ -71,6 +73,7 @@ class BackupScheduler @Inject constructor(
         val workRequest = OneTimeWorkRequestBuilder<BackupWorker>()
             .setInputData(inputData)
             .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.MINUTES)
             .build()
 
         workManager.enqueueUniqueWork(

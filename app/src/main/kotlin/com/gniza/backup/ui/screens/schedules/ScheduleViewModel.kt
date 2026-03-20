@@ -50,17 +50,17 @@ class ScheduleViewModel @Inject constructor(
             scheduleRepository.allSchedules,
             backupSourceRepository.allSources,
             serverRepository.allServers,
-            backupLogRepository.allLogs
+            backupLogRepository.latestPerSchedule
         ) { schedules, sources, servers, logs ->
             val sourceMap = sources.associateBy { it.id }
             val serverMap = servers.associateBy { it.id }
-            val logsBySchedule = logs.groupBy { it.scheduleId }
+            val logsBySchedule = logs.associateBy { it.scheduleId }
             val result = schedules.map { schedule ->
                 ScheduleWithContext(
                     schedule = schedule,
                     sourceName = sourceMap[schedule.sourceId]?.name ?: "Unknown source",
                     serverName = serverMap[schedule.serverId]?.name ?: "Unknown server",
-                    lastLog = logsBySchedule[schedule.id]?.maxByOrNull { it.startedAt }
+                    lastLog = logsBySchedule[schedule.id]
                 )
             }
             UiState.Success(result) as UiState<List<ScheduleWithContext>>

@@ -136,10 +136,13 @@ class BackupExecutor @Inject constructor(
                 )
             )
 
+            uploadRemoteLog(server, schedule, result, startTime, durationSeconds)
+
             backupResult
         } catch (e: Exception) {
             val endTime = System.currentTimeMillis()
             val durationSeconds = ((endTime - startTime) / 1000).toInt()
+            val errorMsg = e.message ?: "Unknown error"
 
             backupLogRepository.updateLog(
                 BackupLog(
@@ -152,10 +155,19 @@ class BackupExecutor @Inject constructor(
                     startedAt = startTime,
                     completedAt = endTime,
                     status = BackupStatus.FAILED,
-                    errorMessage = e.message ?: "Unknown error",
+                    errorMessage = errorMsg,
                     durationSeconds = durationSeconds
                 )
             )
+
+            val failedResult = InternalResult(
+                success = false,
+                filesTransferred = 0,
+                bytesTransferred = 0L,
+                output = "",
+                errorMessage = errorMsg
+            )
+            uploadRemoteLog(server, schedule, failedResult, startTime, durationSeconds)
 
             BackupResult(
                 success = false,
@@ -163,7 +175,7 @@ class BackupExecutor @Inject constructor(
                 bytesTransferred = 0L,
                 durationSeconds = durationSeconds,
                 output = "",
-                errorMessage = e.message ?: "Unknown error"
+                errorMessage = errorMsg
             )
         }
     }
@@ -430,6 +442,71 @@ class BackupExecutor @Inject constructor(
             output = outputMsg,
             errorMessage = nextcloudResult.errorMessage
         )
+    }
+
+    private suspend fun uploadRemoteLog(
+        server: com.gniza.backup.domain.model.Server,
+        schedule: Schedule,
+        result: InternalResult,
+        startTime: Long,
+        durationSeconds: Int
+    ) {
+        try {
+            val logContent = buildRemoteLogContent(result, startTime, durationSeconds)
+            val logPath = buildRemoteLogPath(schedule.destinationPath, result.snapshotName)
+
+            when (server.serverType) {
+                ServerType.SSH -> {
+                    when (rsyncBinaryResolver.resolve()) {
+                        is RsyncBinaryResolver.RsyncBinaryResult.Found -> {
+                            val session = sshCommandExecutor.openSession(server)
+                            try {
+                                sshCommandExecutor.writeRemoteFile(session, logPath, logContent)
+                            } finally {
+                                session.disconnect()
+                            }
+                        }
+                        is RsyncBinaryResolver.RsyncBinaryResult.NotFound -> {
+                            sftpSyncFallback.uploadContent(server, logPath, logContent)
+                        }
+                    }
+                }
+                ServerType.NEXTCLOUD -> {
+                    nextcloudSync.uploadContent(server, logPath, logContent)
+                }
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to upload backup log to remote destination")
+        }
+    }
+
+    private fun buildRemoteLogContent(result: InternalResult, startTime: Long, durationSeconds: Int): String {
+        val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).apply {
+            timeZone = java.util.TimeZone.getTimeZone("UTC")
+        }
+        val status = if (result.success) "SUCCESS" else "FAILED"
+        return buildString {
+            appendLine("=== Gniza Backup Log ===")
+            appendLine("Date: ${dateFormat.format(java.util.Date(startTime))} UTC")
+            appendLine("Duration: ${durationSeconds}s")
+            appendLine("Status: $status")
+            appendLine("Files: ${result.filesTransferred}")
+            appendLine("Bytes: ${result.bytesTransferred}")
+            if (!result.success && result.errorMessage != null) {
+                appendLine("Error: ${result.errorMessage}")
+            }
+            appendLine("========================")
+            appendLine()
+            append(result.output)
+        }
+    }
+
+    private fun buildRemoteLogPath(destinationPath: String, snapshotName: String?): String {
+        return if (snapshotName != null) {
+            "$destinationPath/${Constants.SNAPSHOT_DIR_NAME}/$snapshotName/${Constants.REMOTE_LOG_FILENAME}"
+        } else {
+            "$destinationPath/${Constants.REMOTE_LOG_FILENAME}"
+        }
     }
 
     private companion object {

@@ -1,0 +1,9 @@
+Initial release of Gniza Backup.
+
+• SSH and Nextcloud backup support
+• Incremental snapshot backups with hardlinks
+• Browse and restore files from backups
+• Scheduled backups with Wi-Fi and charging constraints
+• QR code server setup
+• SSH key management
+• Material 3 UI with dark mode

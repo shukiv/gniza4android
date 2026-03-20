@@ -85,4 +85,25 @@ class SshCommandExecutor @Inject constructor() {
             session.disconnect()
         }
     }
+
+    suspend fun writeRemoteFile(session: Session, remotePath: String, content: String) = withContext(Dispatchers.IO) {
+        require(!remotePath.contains("..")) { "Path must not contain '..'" }
+        val channel = session.openChannel("exec") as ChannelExec
+        // Content is written via stdin, NOT interpolated into the shell command
+        channel.setCommand("cat > '${remotePath.replace("'", "'\\''")}'")
+        channel.inputStream = null
+        val outputStream = channel.outputStream
+        channel.connect(CHANNEL_TIMEOUT_MS)
+        outputStream.write(content.toByteArray(Charsets.UTF_8))
+        outputStream.flush()
+        outputStream.close()
+        val startWait = System.currentTimeMillis()
+        while (!channel.isClosed && System.currentTimeMillis() - startWait < 10000) {
+            Thread.sleep(100)
+        }
+        if (channel.exitStatus != 0) {
+            Timber.w("writeRemoteFile: cat exited with status %d for path %s", channel.exitStatus, remotePath)
+        }
+        channel.disconnect()
+    }
 }

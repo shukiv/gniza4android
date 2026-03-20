@@ -69,7 +69,12 @@ class BackupWorker @AssistedInject constructor(
             )
             setForeground(buildForegroundInfo(initialNotification))
         } catch (e: IllegalStateException) {
-            Timber.e(e, "Failed to promote to foreground service; backup may be killed by the OS")
+            Timber.e(e, "Failed to promote to foreground service; will retry later")
+            if (runAttemptCount > 3) {
+                Timber.e("Failed to promote to foreground after %d attempts; giving up", runAttemptCount)
+                return Result.failure()
+            }
+            return Result.retry()
         }
 
         backupLogRepository.markStaleRunningAsFailed()
@@ -160,7 +165,21 @@ class BackupWorker @AssistedInject constructor(
             Timber.w(e, "Failed to cleanup old logs")
         }
 
-        return if (result.success) Result.success() else Result.failure()
+        return when {
+            result.success -> Result.success()
+            isTransientError(result.errorMessage) -> Result.retry()
+            else -> Result.failure()
+        }
+    }
+
+    private fun isTransientError(errorMessage: String?): Boolean {
+        if (errorMessage == null) return false
+        val transientKeywords = listOf(
+            "connection", "timeout", "network", "refused", "unreachable",
+            "IOException", "EHOSTUNREACH", "ENETUNREACH", "ECONNREFUSED",
+            "ECONNRESET", "connection reset", "No route to host"
+        )
+        return transientKeywords.any { errorMessage.contains(it, ignoreCase = true) }
     }
 
     private fun sanitizeErrorForNotification(error: String): String {

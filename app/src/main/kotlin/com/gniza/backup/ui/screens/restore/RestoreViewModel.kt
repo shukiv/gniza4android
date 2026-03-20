@@ -7,10 +7,12 @@ import com.gniza.backup.data.repository.ScheduleRepository
 import com.gniza.backup.data.repository.ServerRepository
 import com.gniza.backup.domain.model.RemoteFileEntry
 import com.gniza.backup.domain.model.Server
+import com.gniza.backup.domain.model.ServerType
 import com.gniza.backup.domain.model.Snapshot
 import com.gniza.backup.service.restore.RestoreService
 import com.gniza.backup.service.rsync.RsyncOutput
 import com.gniza.backup.ui.util.UiState
+import com.gniza.backup.util.Constants
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -43,6 +45,11 @@ class RestoreViewModel @Inject constructor(
 
     private var server: Server? = null
     private var destPath: String = ""
+    var serverType: ServerType = ServerType.SSH
+        private set
+    var isSnapshotMode: Boolean = true
+        private set
+    private val flatNavigationStack = mutableListOf<String>()
 
     init {
         loadScheduleContext()
@@ -60,7 +67,12 @@ class RestoreViewModel @Inject constructor(
                 return@launch
             }
 
-            if (snapshotNameArg != null) {
+            serverType = server!!.serverType
+            isSnapshotMode = schedule.snapshotRetention > 0
+
+            if (snapshotNameArg == Constants.FLAT_BROWSE_SENTINEL || (!isSnapshotMode && snapshotNameArg != null)) {
+                browseFlat("")
+            } else if (snapshotNameArg != null) {
                 browseSnapshot(snapshotNameArg, "")
             } else {
                 loadSnapshots()
@@ -99,7 +111,24 @@ class RestoreViewModel @Inject constructor(
             _files.value = UiState.Loading
             _currentPath.value = relativePath
             try {
-                val entries = restoreService.browseSnapshot(srv, destPath, snapshotName, relativePath)
+                val entries = restoreService.browse(srv, destPath, snapshotName, relativePath)
+                _files.value = UiState.Success(entries)
+            } catch (e: Exception) {
+                _files.value = UiState.Error(e.message ?: "Failed to browse")
+            }
+        }
+    }
+
+    fun browseFlat(relativePath: String) {
+        val srv = server ?: return
+        viewModelScope.launch {
+            _files.value = UiState.Loading
+            _currentPath.value = relativePath
+            try {
+                val entries = restoreService.browse(srv, destPath, null, relativePath)
+                if (relativePath.isNotBlank()) {
+                    flatNavigationStack.add(relativePath)
+                }
                 _files.value = UiState.Success(entries)
             } catch (e: Exception) {
                 _files.value = UiState.Error(e.message ?: "Failed to browse")
@@ -113,7 +142,15 @@ class RestoreViewModel @Inject constructor(
         browseSnapshot(snapshotName, parent)
     }
 
-    fun restoreFile(snapshotName: String, remotePath: String, localPath: String) {
+    fun navigateUpFlat() {
+        if (flatNavigationStack.isNotEmpty()) {
+            flatNavigationStack.removeAt(flatNavigationStack.lastIndex)
+        }
+        val parent = _currentPath.value.substringBeforeLast('/', "")
+        browseFlat(parent)
+    }
+
+    fun restoreFile(snapshotName: String?, remotePath: String, localPath: String) {
         val srv = server ?: return
         viewModelScope.launch {
             _restoreState.value = RestoreProgressState(isRunning = true)

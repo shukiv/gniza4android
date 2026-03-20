@@ -3,16 +3,20 @@ package com.gniza.backup.service.restore
 import com.gniza.backup.domain.model.AuthMethod
 import com.gniza.backup.domain.model.RemoteFileEntry
 import com.gniza.backup.domain.model.Server
+import com.gniza.backup.domain.model.ServerType
 import com.gniza.backup.domain.model.Snapshot
 import com.gniza.backup.service.backup.SnapshotManager
+import com.gniza.backup.service.nextcloud.NextcloudSync
 import com.gniza.backup.service.rsync.RsyncBinaryResolver
 import com.gniza.backup.service.rsync.RsyncCommand
 import com.gniza.backup.service.rsync.RsyncEngine
 import com.gniza.backup.service.rsync.RsyncOutput
 import com.gniza.backup.service.ssh.DropbearKeyConverter
+import com.gniza.backup.service.ssh.SftpSyncFallback
 import com.gniza.backup.service.ssh.SshBinaryResolver
 import com.gniza.backup.service.ssh.SshCommandExecutor
 import com.gniza.backup.util.Constants
+import java.io.File
 import javax.inject.Inject
 
 class RestoreService @Inject constructor(
@@ -21,55 +25,97 @@ class RestoreService @Inject constructor(
     private val rsyncBinaryResolver: RsyncBinaryResolver,
     private val sshBinaryResolver: SshBinaryResolver,
     private val rsyncEngine: RsyncEngine,
-    private val dropbearKeyConverter: DropbearKeyConverter
+    private val dropbearKeyConverter: DropbearKeyConverter,
+    private val nextcloudSync: NextcloudSync,
+    private val sftpSyncFallback: SftpSyncFallback
 ) {
     suspend fun listSnapshots(server: Server, destPath: String): List<Snapshot> {
-        val session = sshCommandExecutor.openSession(server)
-        return try {
-            snapshotManager.listSnapshots(session, destPath)
-        } finally {
-            session.disconnect()
+        return when (server.serverType) {
+            ServerType.SSH -> {
+                val session = sshCommandExecutor.openSession(server)
+                try {
+                    snapshotManager.listSnapshots(session, destPath)
+                } finally {
+                    session.disconnect()
+                }
+            }
+            ServerType.NEXTCLOUD -> {
+                val snapshotDir = "$destPath/${Constants.SNAPSHOT_DIR_NAME}"
+                val entries = nextcloudSync.listRemoteEntries(server, snapshotDir)
+                val directories = entries
+                    .filter { it.isDirectory }
+                    .filter { !it.name.endsWith(Constants.SNAPSHOT_PARTIAL_SUFFIX) }
+                val sortedNames = directories.map { it.name }.sortedDescending()
+                sortedNames.mapIndexed { index, name ->
+                    Snapshot(
+                        name = name,
+                        isPartial = false,
+                        isLatest = index == 0
+                    )
+                }
+            }
         }
     }
 
-    suspend fun deleteSnapshot(server: Server, destPath: String, snapshotName: String) {
+    suspend fun deleteSnapshot(server: Server, destPath: String, snapshotName: String): RestoreResult {
+        if (server.serverType == ServerType.NEXTCLOUD) {
+            return RestoreResult(
+                success = false,
+                errorMessage = "Snapshot deletion is not supported for Nextcloud servers",
+                filesRestored = 0
+            )
+        }
         validatePathComponent(snapshotName, "snapshotName")
         val session = sshCommandExecutor.openSession(server)
         try {
             snapshotManager.deleteSnapshot(session, destPath, snapshotName)
+            return RestoreResult(success = true, filesRestored = 0)
         } finally {
             session.disconnect()
         }
     }
 
-    suspend fun browseSnapshot(
+    suspend fun browse(
         server: Server,
         destPath: String,
-        snapshotName: String,
+        snapshotName: String?,
         relativePath: String = ""
     ): List<RemoteFileEntry> {
-        validatePathComponent(snapshotName, "snapshotName")
+        if (snapshotName != null) {
+            validatePathComponent(snapshotName, "snapshotName")
+        }
         if (relativePath.isNotBlank()) {
             validateRelativePath(relativePath)
         }
 
-        val snapshotPath = "$destPath/${Constants.SNAPSHOT_DIR_NAME}/$snapshotName"
-        val browsePath = if (relativePath.isNotBlank()) "$snapshotPath/$relativePath" else snapshotPath
+        val fullRemotePath = if (snapshotName != null) {
+            val snapshotPath = "$destPath/${Constants.SNAPSHOT_DIR_NAME}/$snapshotName"
+            if (relativePath.isNotBlank()) "$snapshotPath/$relativePath" else snapshotPath
+        } else {
+            if (relativePath.isNotBlank()) "$destPath/$relativePath" else destPath
+        }
 
-        val session = sshCommandExecutor.openSession(server)
-        return try {
-            val result = sshCommandExecutor.exec(
-                session,
-                "ls -la --time-style=+%s '${escapeSingleQuotes(browsePath)}' 2>/dev/null"
-            )
-            if (result.exitCode != 0 || result.output.isBlank()) return emptyList()
+        return when (server.serverType) {
+            ServerType.SSH -> {
+                val session = sshCommandExecutor.openSession(server)
+                try {
+                    val result = sshCommandExecutor.exec(
+                        session,
+                        "ls -la --time-style=+%s '${escapeSingleQuotes(fullRemotePath)}' 2>/dev/null"
+                    )
+                    if (result.exitCode != 0 || result.output.isBlank()) return emptyList()
 
-            result.output.lines()
-                .drop(1) // Skip "total N" line
-                .filter { it.isNotBlank() }
-                .mapNotNull { line -> parseLsLine(line, relativePath) }
-        } finally {
-            session.disconnect()
+                    result.output.lines()
+                        .drop(1) // Skip "total N" line
+                        .filter { it.isNotBlank() }
+                        .mapNotNull { line -> parseLsLine(line, relativePath) }
+                } finally {
+                    session.disconnect()
+                }
+            }
+            ServerType.NEXTCLOUD -> {
+                nextcloudSync.listRemoteEntries(server, fullRemotePath)
+            }
         }
     }
 
@@ -97,31 +143,55 @@ class RestoreService @Inject constructor(
     suspend fun restore(
         server: Server,
         destPath: String,
-        snapshotName: String,
+        snapshotName: String?,
         remotePath: String,
         localPath: String,
         onProgress: (RsyncOutput) -> Unit
     ): RestoreResult {
-        validatePathComponent(snapshotName, "snapshotName")
+        if (snapshotName != null) {
+            validatePathComponent(snapshotName, "snapshotName")
+        }
         if (remotePath.isNotBlank()) {
             validateRelativePath(remotePath)
         }
 
+        val fullRemotePath = if (snapshotName != null) {
+            val snapshotFullPath = "$destPath/${Constants.SNAPSHOT_DIR_NAME}/$snapshotName"
+            if (remotePath.isNotBlank()) "$snapshotFullPath/$remotePath" else snapshotFullPath
+        } else {
+            if (remotePath.isNotBlank()) "$destPath/$remotePath" else destPath
+        }
+
+        return when (server.serverType) {
+            ServerType.SSH -> restoreViaSsh(server, fullRemotePath, localPath, onProgress)
+            ServerType.NEXTCLOUD -> restoreViaNextcloud(server, fullRemotePath, localPath, onProgress)
+        }
+    }
+
+    private suspend fun restoreViaSsh(
+        server: Server,
+        fullRemotePath: String,
+        localPath: String,
+        onProgress: (RsyncOutput) -> Unit
+    ): RestoreResult {
         val rsyncBinary = rsyncBinaryResolver.resolve()
         val sshBinary = sshBinaryResolver.resolve()
 
         if (rsyncBinary !is RsyncBinaryResolver.RsyncBinaryResult.Found ||
             sshBinary !is SshBinaryResolver.SshBinaryResult.Found) {
-            return RestoreResult(false, "Rsync or SSH binary not available for restore")
+            // Fallback to SFTP
+            onProgress(RsyncOutput.Log("Rsync/SSH not available, using SFTP fallback"))
+            val localFile = File(localPath)
+            val sftpResult = sftpSyncFallback.downloadFile(server, fullRemotePath, localFile, onProgress)
+            return RestoreResult(
+                success = sftpResult.success,
+                errorMessage = sftpResult.errorMessage,
+                filesRestored = sftpResult.filesTransferred
+            )
         }
 
         val sshCommand = buildSshCommand(server, sshBinary.path, sshBinary.isDropbear)
-        val snapshotFullPath = "$destPath/${Constants.SNAPSHOT_DIR_NAME}/$snapshotName"
-        val remoteSource = if (remotePath.isNotBlank()) {
-            "${server.username}@${server.host}:${snapshotFullPath}/${remotePath}"
-        } else {
-            "${server.username}@${server.host}:${snapshotFullPath}/"
-        }
+        val remoteSource = "${server.username}@${server.host}:${fullRemotePath}"
 
         val command = RsyncCommand(
             rsyncPath = rsyncBinary.path,
@@ -150,6 +220,45 @@ class RestoreService @Inject constructor(
         }
 
         return RestoreResult(success, errorMessage, filesTransferred)
+    }
+
+    private suspend fun restoreViaNextcloud(
+        server: Server,
+        fullRemotePath: String,
+        localPath: String,
+        onProgress: (RsyncOutput) -> Unit
+    ): RestoreResult {
+        val localFile = File(localPath)
+
+        // Try to determine if the remote path is a directory by listing it
+        return try {
+            val entries = nextcloudSync.listRemoteEntries(server, fullRemotePath)
+            if (entries.isNotEmpty()) {
+                // It's a directory
+                val result = nextcloudSync.downloadDirectory(server, fullRemotePath, localFile, onProgress)
+                RestoreResult(
+                    success = result.success,
+                    errorMessage = result.errorMessage,
+                    filesRestored = result.filesTransferred
+                )
+            } else {
+                // Try as a single file
+                val result = nextcloudSync.download(server, fullRemotePath, localFile, onProgress)
+                RestoreResult(
+                    success = result.success,
+                    errorMessage = result.errorMessage,
+                    filesRestored = result.filesTransferred
+                )
+            }
+        } catch (e: Exception) {
+            // If listing fails, try as a single file
+            val result = nextcloudSync.download(server, fullRemotePath, localFile, onProgress)
+            RestoreResult(
+                success = result.success,
+                errorMessage = result.errorMessage,
+                filesRestored = result.filesTransferred
+            )
+        }
     }
 
     private fun buildSshCommand(server: Server, sshPath: String, isDropbear: Boolean): String {
