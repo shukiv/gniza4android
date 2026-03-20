@@ -2,6 +2,11 @@
 
 Android backup solution that automatically backs up folders from your device to a remote server. Supports SSH servers (rsync/SFTP) and Nextcloud (WebDAV). Bundles rsync and SSH (Dropbear) binaries — no Termux or root required.
 
+## Download
+
+- **[Download APK from GitHub Releases](https://github.com/shukiv/gniza4android/releases/latest)**
+- **F-Droid** — submission pending ([tracking MR](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/35044))
+
 ## Features
 
 - **Bundled rsync + SSH binaries** — ships with rsync and Dropbear dbclient for arm64-v8a, armeabi-v7a, and x86_64
