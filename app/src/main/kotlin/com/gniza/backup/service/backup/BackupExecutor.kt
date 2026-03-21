@@ -267,10 +267,15 @@ class BackupExecutor @Inject constructor(
                 val remoteDestination = "${server.username}@${server.host}:${basePath}/${partialDir}/${folderBaseName}/"
 
                 // --link-dest is relative to the destination
-                // From snapshots/<new>.partial/<folder>/ to snapshots/<prev>/<folder>/
+                // Destination is: basePath/snapshots/<new>.partial/<folder>/
+                // Previous is:    basePath/snapshots/<prev>/<folder>/
+                // So relative:    ../../<prev>/<folder>/
                 val linkDest = if (latestSnapshot != null) {
-                    // latestSnapshot is like "snapshots/2025-03-15T120000" (relative to basePath)
-                    "../../${latestSnapshot}/${folderBaseName}/"
+                    // latestSnapshot from readlink is like "snapshots/<prev>" — strip the prefix
+                    val prevName = latestSnapshot.removePrefix("${Constants.SNAPSHOT_DIR_NAME}/")
+                        .removePrefix("/")
+                        .trimEnd('/')
+                    "../../${prevName}/${folderBaseName}/"
                 } else {
                     null
                 }
